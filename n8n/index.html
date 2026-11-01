@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workflows n8n da clínica</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  h1 { font: 600 clamp(24px, 3vw, 32px) var(--font-display); margin-top: 24px; }
+  .grid { display: grid; gap: 16px; padding-bottom: 48px; }
+  .wf { padding: 20px; }
+  .wf h2 { font-size: 20px; margin-bottom: 6px; }
+  .nodes { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 12px 0; font-size: 13px; }
+  .nodes span.n { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px; font-weight: 600; }
+  .nodes span.s { color: var(--muted); }
+  .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+  ol { padding-left: 18px; }
+</style>
+</head>
+<body>
+<div class="demo-banner">Portfólio: workflows n8n que fazem a versão real das demos. · <a href="../index.html">Ver todas as demos</a></div>
+<main class="container">
+  <h1>Workflows n8n</h1>
+  <p class="muted" style="margin-top:-6px">Arquivos prontos para importar no n8n (menu ⋯ → <i>Import from File</i>). Cada um traz uma nota explicando o que configurar.</p>
+  <div class="grid">
+    <article class="card wf">
+      <h2>Atendente de WhatsApp com IA</h2>
+      <p class="muted">A versão real da <a href="../chatbot/index.html">demo do chatbot</a>.</p>
+      <div class="nodes"><span class="n">Webhook WhatsApp</span><span class="s">→</span><span class="n">Regras da clínica</span><span class="s">→</span><span class="n">Claude: intenção + resposta</span><span class="s">→</span><span class="n">Urgência?</span><span class="s">→</span><span class="n">Avisa recepção</span><span class="s">→</span><span class="n">Responde paciente</span></div>
+      <div class="acts"><a class="btn btn-primary btn-sm" href="agente-whatsapp.json" download>Baixar JSON</a></div>
+    </article>
+    <article class="card wf">
+      <h2>Lembretes de 24h e follow-up de orçamentos</h2>
+      <p class="muted">O que a <a href="../gestao/index.html">demo do painel</a> e o <a href="../crm/index.html">assistente</a> mostram, rodando sozinho todo dia às 9h.</p>
+      <div class="nodes"><span class="n">Todo dia 9h</span><span class="s">→</span><span class="n">Agendamentos de amanhã</span><span class="s">→</span><span class="n">Lembrete WhatsApp</span><span class="s">·</span><span class="n">Orçamentos parados</span><span class="s">→</span><span class="n">Claude escreve</span><span class="s">→</span><span class="n">Envia</span><span class="s">→</span><span class="n">Atualiza</span></div>
+      <div class="acts"><a class="btn btn-primary btn-sm" href="lembretes-e-orcamentos.json" download>Baixar JSON</a></div>
+    </article>
+    <article class="card wf">
+      <h2>Leads do site e relatório semanal</h2>
+      <p class="muted">A versão real da <a href="../automacao/index.html">demo de automação</a>.</p>
+      <div class="nodes"><span class="n">Formulário</span><span class="s">→</span><span class="n">Google Sheets</span><span class="s">→</span><span class="n">Gmail</span><span class="s">→</span><span class="n">WhatsApp</span><span class="s">·</span><span class="n">Segunda 8h</span><span class="s">→</span><span class="n">Resumo</span><span class="s">→</span><span class="n">E-mail</span></div>
+      <div class="acts"><a class="btn btn-primary btn-sm" href="leads-e-relatorio.json" download>Baixar JSON</a></div>
+    </article>
+    <article class="card wf">
+      <h2>O que é preciso para rodar</h2>
+      <ol>
+        <li>n8n (nuvem ou servidor próprio).</li>
+        <li>Conta no WhatsApp Business Platform (Meta), com número verificado e modelos de mensagem aprovados.</li>
+        <li>Chave da API da Anthropic (Claude), salva como credencial no n8n, nunca no fluxo.</li>
+        <li>Supabase (ou o banco do sistema da clínica) para agenda e orçamentos; Google Sheets e Gmail para os leads.</li>
+      </ol>
+    </article>
+  </div>
+</main>
+</body>
+</html>

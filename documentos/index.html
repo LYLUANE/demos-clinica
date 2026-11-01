@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chat com os documentos da clínica (demo)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  h1 { font: 600 clamp(24px, 3vw, 32px) var(--font-display); margin-top: 24px; }
+  .grid { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 20px; align-items: start; padding-bottom: 48px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+  .box { padding: 18px; }
+  .box h2 { font-size: 17px; }
+  .docs { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .docs button { width: 100%; text-align: left; border: 1px solid var(--border); background: var(--surface); border-radius: 10px; padding: 10px 12px; font: 500 14px var(--font); cursor: pointer; display: flex; gap: 8px; align-items: center; }
+  .docs button:hover { background: var(--primary-50); }
+  .docs small { color: var(--muted); margin-left: auto; }
+  .chat { display: flex; flex-direction: column; height: 620px; }
+  .msgs { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px; }
+  .m { padding: 10px 12px; border-radius: 12px; font-size: 14.5px; max-width: 92%; }
+  .m.u { align-self: flex-end; background: var(--primary); color: #fff; border-bottom-right-radius: 4px; }
+  .m.a { align-self: flex-start; background: var(--surface-2); border-bottom-left-radius: 4px; }
+  .cita { margin-top: 8px; padding: 8px 10px; border-left: 3px solid var(--accent); background: #fff; border-radius: 6px; font-size: 13px; color: var(--muted); }
+  .cita b { color: var(--text); }
+  .m.a.nao { background: #fff7ed; }
+  .sug { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+  .sug button { border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 6px 12px; font: 500 13px var(--font); cursor: pointer; color: var(--primary); }
+  .chat form { display: flex; gap: 8px; }
+  dialog { border: 0; border-radius: 18px; padding: 24px; width: min(640px, 100% - 32px); max-height: 85vh; }
+  dialog::backdrop { background: rgba(10, 25, 25, .45); }
+  .doc-text p { margin: 0 0 10px; }
+  mark { background: #fde68a; }
+</style>
+</head>
+<body>
+<div class="demo-banner">Demonstração de portfólio: perguntas respondidas a partir dos documentos de uma clínica fictícia. · <a href="../index.html">Ver todas as demos</a></div>
+
+<main class="container">
+  <h1>Chat com os documentos da clínica</h1>
+  <p class="muted" style="margin-top:-6px">A equipe ou o paciente pergunta, e a resposta vem <b>só do que está nos documentos</b>, sempre com o trecho de origem. Se a informação não estiver lá, o assistente diz que não sabe e encaminha para a equipe, em vez de inventar.</p>
+
+  <div class="grid">
+    <div class="card box">
+      <h2>📚 Base de conhecimento</h2>
+      <ul class="docs" id="docs"></ul>
+      <button class="btn btn-ghost btn-sm" id="add" style="margin-top:12px">+ Adicionar documento</button>
+      <p class="muted" style="font-size:12px">Na versão real: PDFs e documentos do Google Drive, indexados com busca semântica e respondidos pela Claude.</p>
+    </div>
+    <div class="card box chat">
+      <h2>💬 Pergunte</h2>
+      <div class="msgs" id="msgs" aria-live="polite"></div>
+      <div class="sug" id="sug"></div>
+      <form id="f"><label for="q" class="sr-only">Pergunta</label><input id="q" placeholder="Ex.: posso tomar café depois do clareamento?" autocomplete="off"><button class="btn btn-primary">Enviar</button></form>
+    </div>
+  </div>
+</main>
+
+<dialog id="dlg"></dialog>
+
+<script>
+  const $ = (s) => document.querySelector(s);
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const norm = (t) => t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const KEY = 'demoClinica.docs.v1';
+
+  const BASE = [
+    { titulo: 'Cuidados após o clareamento', ic: '🦷', paragrafos: [
+      'Nas primeiras 48 horas após o clareamento, evite alimentos e bebidas com corante, como café, chá preto, vinho tinto, refrigerante de cola, açaí, beterraba e molho de tomate.',
+      'É normal sentir sensibilidade nos dentes por até 3 dias. Use o creme dental para dentes sensíveis indicado pela dentista e evite bebidas muito geladas ou muito quentes.',
+      'Não fume nas 48 horas seguintes ao procedimento, porque o cigarro mancha o esmalte com mais facilidade nesse período.',
+      'O resultado dura em média de 1 a 3 anos, dependendo dos hábitos. Uma manutenção com gel clareador pode ser feita a cada 12 meses.',
+    ] },
+    { titulo: 'Cuidados após a toxina botulínica', ic: '💉', paragrafos: [
+      'Nas 4 horas seguintes à aplicação, não deite e não abaixe a cabeça por muito tempo.',
+      'Evite atividade física intensa, sauna e exposição forte ao sol nas primeiras 24 horas.',
+      'Não massageie nem pressione a região tratada no dia da aplicação.',
+      'O efeito começa a aparecer entre 3 e 5 dias, e o resultado final é avaliado em 15 dias, no retorno, que já está incluído no valor.',
+      'Bebidas alcoólicas devem ser evitadas nas primeiras 24 horas.',
+    ] },
+    { titulo: 'Política de cancelamento e remarcação', ic: '📅', paragrafos: [
+      'Remarcações e cancelamentos podem ser feitos sem custo até 24 horas antes do horário, pelo WhatsApp ou pelo telefone da recepção.',
+      'Cancelamentos com menos de 24 horas de antecedência ou faltas sem aviso geram uma taxa de R$ 50, descontada no próximo atendimento.',
+      'Atrasos de mais de 15 minutos podem exigir a remarcação, para não atrasar os próximos pacientes.',
+      'Em caso de imprevisto de saúde com atestado, a taxa não é cobrada.',
+    ] },
+    { titulo: 'Formas de pagamento', ic: '💳', paragrafos: [
+      'Aceitamos Pix, cartão de débito e cartão de crédito.',
+      'Tratamentos estéticos podem ser parcelados em até 10 vezes sem juros no cartão de crédito, com parcela mínima de R$ 100.',
+      'Pagamentos à vista no Pix têm 5% de desconto em tratamentos acima de R$ 1.000.',
+      'A clínica não atende convênios, mas emite recibo e relatório para pedido de reembolso ao plano de saúde.',
+    ] },
+    { titulo: 'Horário de funcionamento e contato', ic: '🕗', paragrafos: [
+      'O horário de funcionamento é de segunda a sexta, das 8h às 19h, e aos sábados, das 8h às 13h. Não abrimos aos domingos e feriados.',
+      'O atendimento pelo WhatsApp é feito pela assistente virtual 24 horas por dia; a recepção responde no horário de funcionamento.',
+      'A clínica fica na Av. Exemplo, 1000, sala 12, no Centro (endereço fictício), com estacionamento conveniado no prédio.',
+    ] },
+    { titulo: 'Preparo para limpeza de pele', ic: '✨', paragrafos: [
+      'Venha sem maquiagem, se possível. Se não for possível, a limpeza começa com a remoção completa.',
+      'Suspenda o uso de ácidos (como retinoico e glicólico) 5 dias antes do procedimento.',
+      'Depois da limpeza, a pele pode ficar avermelhada por algumas horas. Use protetor solar e evite maquiagem por 24 horas.',
+      'A recomendação é fazer uma limpeza de pele profunda a cada 30 a 45 dias.',
+    ] },
+  ];
+
+  let docs;
+  try { docs = JSON.parse(localStorage.getItem(KEY)); } catch (e) { docs = null; }
+  if (!Array.isArray(docs)) docs = BASE;
+  const salvar = () => { try { localStorage.setItem(KEY, JSON.stringify(docs)); } catch (e) {} };
+
+  // Busca: na versão real, embeddings + Claude. Aqui, palavras em comum com
+  // pesos e sinônimos, o bastante para mostrar a ideia de "responder com fonte".
+  const STOP = new Set('a o as os de da do das dos e em no na nos nas um uma uns umas para por com sem que qual quais quanto quando como posso pode depois antes apos ja eu me meu minha voce se ser sao ha tem ter isso essa esse esta este ao aos sobre mais muito tempo dias dia horas'.split(' '));
+  const SIN = { cafe: ['corante', 'cafe'], mancha: ['corante', 'mancha'], beber: ['bebidas', 'alcoolicas'], cerveja: ['alcoolicas', 'bebidas'], alcool: ['alcoolicas'], academia: ['atividade', 'fisica'], exercicio: ['atividade', 'fisica'], malhar: ['atividade', 'fisica'], parcela: ['parcelados', 'vezes'], parcelar: ['parcelados', 'vezes'], desconto: ['desconto', 'pix'], plano: ['convenios', 'reembolso'], convenio: ['convenios', 'reembolso'], desmarcar: ['cancelamento', 'remarcacoes', 'cancelamentos'], cancelar: ['cancelamentos', 'cancelamento'], remarcar: ['remarcacoes', 'remarcacao'], faltar: ['faltas', 'taxa'], atrasar: ['atrasos'], doi: ['sensibilidade'], dor: ['sensibilidade'], sensivel: ['sensibilidade'], botox: ['aplicacao', 'toxina'], efeito: ['efeito', 'resultado'], dura: ['dura', 'resultado'], maquiagem: ['maquiagem'], sol: ['sol', 'protetor'], fumar: ['fume', 'cigarro'], cigarro: ['fume', 'cigarro'], deitar: ['deite'], acido: ['acidos'], retorno: ['retorno'], custa: ['taxa'], cobra: ['taxa'], cima: ['antecedencia'], ultima: ['antecedencia'] };
+  const tokens = (t) => norm(t).replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w));
+  const raiz = (w) => w.slice(0, 5);
+
+  function buscar(q) {
+    const qt = tokens(q).flatMap((w) => [w, ...(SIN[w] || [])]);
+    const qr = new Set(qt.map(raiz));
+    const trechos = docs.flatMap((d) => d.paragrafos.map((p) => new Set(tokens(p).map(raiz))));
+    // Palavra rara (em até 2 trechos) vale mais que palavra comum.
+    const peso = (r) => (trechos.filter((t) => t.has(r)).length <= 2 ? 1.5 : 1);
+    let melhor = null;
+    docs.forEach((d, di) => d.paragrafos.forEach((p, pi) => {
+      const pr = new Set(tokens(p).map(raiz));
+      const tr = new Set(tokens(d.titulo).map(raiz));
+      let s = 0;
+      qr.forEach((r) => { if (pr.has(r)) s += peso(r); if (tr.has(r)) s += 0.6; });
+      if (!melhor || s > melhor.s) melhor = { s, di, pi };
+    }));
+    return melhor && melhor.s >= 1.5 ? melhor : null;
+  }
+
+  function responder(q) {
+    const r = buscar(q);
+    const m = document.createElement('div');
+    if (!r) {
+      m.className = 'm a nao';
+      m.innerHTML = 'Não encontrei essa informação nos documentos da clínica, então prefiro não arriscar uma resposta. 🙏<br>Encaminhei sua pergunta para a equipe, que responde em breve.';
+    } else {
+      const d = docs[r.di];
+      m.className = 'm a';
+      m.innerHTML = `${esc(d.paragrafos[r.pi])}<div class="cita">Fonte: <b>${esc(d.titulo)}</b>, trecho ${r.pi + 1} · <a href="#" data-ver="${r.di}" data-p="${r.pi}">ver documento</a></div>`;
+    }
+    $('#msgs').appendChild(m); $('#msgs').scrollTop = $('#msgs').scrollHeight;
+  }
+
+  function perguntar(q) {
+    const u = document.createElement('div'); u.className = 'm u'; u.textContent = q;
+    $('#msgs').appendChild(u);
+    setTimeout(() => responder(q), 450);
+  }
+
+  function verDoc(di, pi) {
+    const d = docs[di], dlg = $('#dlg');
+    dlg.innerHTML = `<h2 style="margin-top:0">${d.ic || '📄'} ${esc(d.titulo)}</h2><div class="doc-text">${d.paragrafos.map((p, i) => `<p>${i === pi ? `<mark>${esc(p)}</mark>` : esc(p)}</p>`).join('')}</div>
+      <div style="display:flex;justify-content:flex-end"><button class="btn btn-primary" onclick="this.closest('dialog').close()">Fechar</button></div>`;
+    dlg.showModal();
+  }
+
+  function renderDocs() {
+    $('#docs').innerHTML = docs.map((d, i) => `<li><button data-ver="${i}">${d.ic || '📄'} ${esc(d.titulo)}<small>${d.paragrafos.length} trechos</small></button></li>`).join('');
+  }
+
+  $('#add').onclick = () => {
+    const dlg = $('#dlg');
+    dlg.innerHTML = `<h2 style="margin-top:0">Adicionar documento</h2>
+      <form id="fa" style="display:grid;gap:12px"><div><label for="at">Título</label><input id="at" required placeholder="Ex.: Cuidados após a extração"></div>
+      <div><label for="ax">Texto (um parágrafo por linha)</label><textarea id="ax" rows="8" required></textarea></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" class="btn btn-ghost" onclick="this.closest('dialog').close()">Cancelar</button><button class="btn btn-primary">Adicionar</button></div></form>`;
+    $('#fa').onsubmit = (e) => {
+      e.preventDefault();
+      const par = $('#ax').value.split('\n').map((x) => x.trim()).filter(Boolean);
+      if (!par.length) return;
+      docs.push({ titulo: $('#at').value.trim(), ic: '📄', paragrafos: par }); salvar(); renderDocs(); dlg.close();
+    };
+    dlg.showModal();
+  };
+
+  document.addEventListener('click', (e) => {
+    const v = e.target.closest('[data-ver]'); if (!v) return;
+    e.preventDefault(); verDoc(Number(v.dataset.ver), v.dataset.p != null ? Number(v.dataset.p) : -1);
+  });
+
+  const SUG = ['Posso tomar café depois do clareamento?', 'Quando posso ir para a academia depois do botox?', 'Quanto custa desmarcar em cima da hora?', 'Dá para parcelar?', 'Vocês atendem convênio?', 'Vocês fazem implante?'];
+  $('#sug').innerHTML = SUG.map((s) => `<button type="button">${s}</button>`).join('');
+  $('#sug').onclick = (e) => { if (e.target.tagName === 'BUTTON') perguntar(e.target.textContent); };
+  $('#f').onsubmit = (e) => { e.preventDefault(); const q = $('#q').value.trim(); if (q) { $('#q').value = ''; perguntar(q); } };
+
+  renderDocs();
+  const m = document.createElement('div'); m.className = 'm a';
+  m.textContent = 'Olá! Respondo dúvidas com base nos documentos da clínica: cuidados pós-procedimento, cancelamento, pagamento e preparo. Pergunte à vontade.';
+  $('#msgs').appendChild(m);
+</script>
+</body>
+</html>

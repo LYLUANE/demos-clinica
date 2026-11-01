@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estoque e caixa da clínica (demo)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  h1 { font: 600 clamp(24px, 3vw, 32px) var(--font-display); margin-top: 24px; }
+  .tabs { display: flex; gap: 6px; margin: 16px 0; flex-wrap: wrap; }
+  .tabs button { border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 8px 16px; font: 600 14px var(--font); cursor: pointer; color: var(--muted); }
+  .tabs button[aria-selected="true"] { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr)); gap: 12px; margin-bottom: 16px; }
+  .kpi { padding: 16px; } .kpi .v { font: 600 26px var(--font-display); } .kpi .l { color: var(--muted); font-size: 13px; }
+  .kpi.alerta .v { color: var(--danger); }
+  .box { padding: 18px; margin-bottom: 16px; }
+  .box h2 { font-size: 17px; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+  .nivel { width: 110px; height: 8px; background: var(--surface-2); border-radius: 4px; overflow: hidden; display: inline-block; vertical-align: middle; }
+  .nivel i { display: block; height: 100%; background: var(--ok); }
+  .nivel i.baixo { background: var(--danger); } .nivel i.medio { background: var(--warn); }
+  .row-acts { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chart { display: flex; align-items: flex-end; gap: 6px; height: 180px; padding-top: 10px; }
+  .chart .c { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); min-width: 0; }
+  .chart .b { width: 100%; display: flex; flex-direction: column; justify-content: flex-end; height: 140px; gap: 2px; }
+  .chart .in { background: var(--primary); border-radius: 4px 4px 0 0; }
+  .chart .out { background: #e8a87c; border-radius: 0 0 4px 4px; }
+  .legend { display: flex; gap: 16px; font-size: 13px; color: var(--muted); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
+  .pos { color: var(--ok); } .neg { color: var(--danger); }
+  dialog { border: 0; border-radius: 18px; padding: 24px; width: min(560px, 100% - 32px); }
+  dialog::backdrop { background: rgba(10, 25, 25, .45); }
+</style>
+</head>
+<body>
+<div class="demo-banner">Demonstração de portfólio: estoque e caixa de uma clínica fictícia. · <a href="../index.html">Ver todas as demos</a></div>
+
+<main class="container" style="padding-bottom:48px">
+  <h1>Estoque e caixa</h1>
+  <p class="muted" style="margin-top:-6px">Cada atendimento concluído na <a href="../gestao/index.html">agenda</a> dá baixa nos materiais e entra no caixa. Quando um item fica abaixo do mínimo, o sistema avisa e monta o pedido de compra.</p>
+  <div class="tabs" role="tablist">
+    <button role="tab" data-tab="estoque" aria-selected="true">📦 Estoque</button>
+    <button role="tab" data-tab="caixa" aria-selected="false">💵 Caixa</button>
+    <button role="tab" data-tab="movs" aria-selected="false">🧾 Movimentações</button>
+  </div>
+  <div id="view"></div>
+</main>
+
+<dialog id="dlg"></dialog>
+
+<script src="../assets/store.js"></script>
+<script>
+  const S = DemoStore, U = S.util;
+  const $ = (s) => document.querySelector(s);
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const KEY = 'demoClinica.estoque.v1';
+  let aba = 'estoque';
+
+  const ITENS = [
+    { id: 'luva', nome: 'Luvas de procedimento', un: 'pares', min: 60, ideal: 200, custo: 0.9 },
+    { id: 'mascara', nome: 'Máscaras descartáveis', un: 'un', min: 50, ideal: 150, custo: 0.5 },
+    { id: 'anest', nome: 'Anestésico (tubete)', un: 'tubetes', min: 20, ideal: 80, custo: 3.2 },
+    { id: 'gel', nome: 'Gel clareador', un: 'kits', min: 3, ideal: 10, custo: 120 },
+    { id: 'toxina', nome: 'Toxina botulínica', un: 'frascos', min: 2, ideal: 6, custo: 650 },
+    { id: 'acido', nome: 'Ácido hialurônico', un: 'seringas', min: 2, ideal: 6, custo: 480 },
+    { id: 'pasta', nome: 'Pasta profilática', un: 'potes', min: 2, ideal: 6, custo: 35 },
+    { id: 'skin', nome: 'Kit limpeza de pele', un: 'kits', min: 4, ideal: 12, custo: 28 },
+  ];
+  // Quanto cada serviço consome de cada material.
+  const CONSUMO = {
+    avaliacao: { luva: 1, mascara: 1 },
+    limpeza: { luva: 2, mascara: 1, pasta: 0.1 },
+    clareamento: { luva: 2, mascara: 1, gel: 1 },
+    lentes: { luva: 3, mascara: 2, anest: 2 },
+    botox: { luva: 1, mascara: 1, toxina: 0.5 },
+    preenchimento: { luva: 1, mascara: 1, acido: 1, anest: 1 },
+    pele: { luva: 1, mascara: 1, skin: 1 },
+  };
+  // [descrição, valor, dias atrás] — relativo a hoje para sempre caber no período.
+  const DESPESAS_FIXAS = [['Aluguel', 4500, 12], ['Internet e sistemas', 380, 9], ['Folha de pagamento', 9800, 5], ['Energia', 620, 2]];
+
+  function seed() {
+    // Valores antes da baixa dos atendimentos dos últimos 14 dias.
+    const qtd = { luva: 230, mascara: 160, anest: 40, gel: 9, toxina: 6, acido: 6, pasta: 4, skin: 12 };
+    return { qtd, baixados: [], movs: [{ quando: U.hoje(), tipo: 'ajuste', texto: 'Inventário inicial (dados de exemplo)' }], compras: [] };
+  }
+  let E;
+  try { E = JSON.parse(localStorage.getItem(KEY)); } catch (e) { E = null; }
+  if (!E || !E.qtd) E = seed();
+  const salvar = () => { try { localStorage.setItem(KEY, JSON.stringify(E)); } catch (e) {} };
+
+  // Dá baixa dos atendimentos concluídos que ainda não foram contabilizados.
+  function baixarConcluidos() {
+    const novos = S.load().agendamentos.filter((a) => a.status === 'concluido' && !E.baixados.includes(a.id));
+    novos.forEach((a) => {
+      Object.entries(CONSUMO[a.servicoId] || {}).forEach(([id, q]) => { E.qtd[id] = Math.max(0, +(E.qtd[id] - q).toFixed(1)); });
+      E.baixados.push(a.id);
+    });
+    if (novos.length) E.movs.unshift({ quando: U.hoje(), tipo: 'baixa', texto: `Baixa automática de ${novos.length} atendimento(s) concluído(s)` });
+    salvar();
+    return novos.length;
+  }
+
+  const situacao = (it) => { const q = E.qtd[it.id]; return q <= it.min ? 'baixo' : q <= it.min * 1.5 ? 'medio' : 'ok'; };
+
+  function viewEstoque() {
+    const baixos = ITENS.filter((it) => situacao(it) === 'baixo');
+    const valor = ITENS.reduce((t, it) => t + E.qtd[it.id] * it.custo, 0);
+    return `
+      <div class="kpis">
+        <div class="card kpi ${baixos.length ? 'alerta' : ''}"><div class="v">${baixos.length}</div><div class="l">itens abaixo do mínimo</div></div>
+        <div class="card kpi"><div class="v">${ITENS.length}</div><div class="l">materiais controlados</div></div>
+        <div class="card kpi"><div class="v">${U.brl(valor)}</div><div class="l">valor em estoque</div></div>
+      </div>
+      <div class="card box">
+        <div class="row-acts" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Materiais</h2>
+          <div class="row-acts"><button class="btn btn-ghost btn-sm" id="baixar">Dar baixa dos atendimentos</button><button class="btn btn-primary btn-sm" id="pedido">Gerar pedido de compra</button></div></div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Material</th><th>Quantidade</th><th>Nível</th><th>Mínimo</th><th>Situação</th></tr></thead>
+          <tbody>${ITENS.map((it) => { const s = situacao(it), q = E.qtd[it.id]; return `<tr>
+            <td><b>${it.nome}</b></td><td>${q} ${it.un}</td>
+            <td><span class="nivel"><i class="${s === 'baixo' ? 'baixo' : s === 'medio' ? 'medio' : ''}" style="width:${Math.min(100, q / it.ideal * 100)}%"></i></span></td>
+            <td>${it.min}</td><td>${s === 'baixo' ? '<span class="badge faltou">Comprar</span>' : s === 'medio' ? '<span class="badge pendente">Atenção</span>' : '<span class="badge confirmado">OK</span>'}</td></tr>`; }).join('')}</tbody>
+        </table></div>
+      </div>`;
+  }
+
+  function caixa() {
+    const d = S.load(), hj = U.hoje();
+    const dias = [];
+    for (let i = 13; i >= 0; i--) dias.push(U.iso(U.addDays(new Date(), -i)));
+    const ent = Object.fromEntries(dias.map((x) => [x, 0])), sai = Object.fromEntries(dias.map((x) => [x, 0]));
+    d.agendamentos.filter((a) => a.status === 'concluido' && ent[a.data] != null).forEach((a) => (ent[a.data] += S.servico(a.servicoId).preco || 0));
+    const lanc = [];
+    DESPESAS_FIXAS.forEach(([nome, v, atras]) => { const x = U.iso(U.addDays(new Date(), -atras)); sai[x] += v; lanc.push({ data: x, nome, v }); });
+    E.compras.forEach((c) => { if (sai[c.data] != null) { sai[c.data] += c.total; lanc.push({ data: c.data, nome: 'Compra de materiais', v: c.total }); } });
+    return { dias, ent, sai, lanc };
+  }
+
+  function viewCaixa() {
+    const { dias, ent, sai, lanc } = caixa();
+    const tE = dias.reduce((t, x) => t + ent[x], 0), tS = dias.reduce((t, x) => t + sai[x], 0);
+    const max = Math.max(1, ...dias.map((x) => Math.max(ent[x], sai[x])));
+    return `
+      <div class="kpis">
+        <div class="card kpi"><div class="v pos">${U.brl(tE)}</div><div class="l">entradas (14 dias)</div></div>
+        <div class="card kpi"><div class="v neg">${U.brl(tS)}</div><div class="l">saídas (14 dias)</div></div>
+        <div class="card kpi"><div class="v ${tE - tS >= 0 ? 'pos' : 'neg'}">${U.brl(tE - tS)}</div><div class="l">saldo do período</div></div>
+      </div>
+      <div class="card box"><h2>Entradas × saídas por dia</h2>
+        <div class="legend"><span><i style="background:var(--primary)"></i>Entradas (atendimentos)</span><span><i style="background:#e8a87c"></i>Saídas</span></div>
+        <div class="chart">${dias.map((x) => `<div class="c" title="${U.fmtCurta(x)}: +${U.brl(ent[x])} / -${U.brl(sai[x])}"><div class="b">
+          <div class="in" style="height:${ent[x] / max * 70}px"></div><div class="out" style="height:${Math.min(70, sai[x] / max * 70)}px"></div></div>${U.fmtCurta(x).slice(0, 2)}</div>`).join('')}</div>
+        <p class="muted" style="font-size:12px">Saídas grandes (aluguel e folha) aparecem cortadas no gráfico para não esconder o dia a dia.</p>
+      </div>
+      <div class="card box"><h2>Saídas do período</h2><div class="table-wrap"><table><thead><tr><th>Data</th><th>Descrição</th><th>Valor</th></tr></thead>
+        <tbody>${lanc.sort((a, b) => b.data.localeCompare(a.data)).map((l) => `<tr><td>${U.fmtCurta(l.data)}</td><td>${esc(l.nome)}</td><td class="neg">${U.brl(l.v)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">Sem saídas.</td></tr>'}</tbody></table></div></div>`;
+  }
+
+  function viewMovs() {
+    return `<div class="card box"><h2>Movimentações de estoque</h2><div class="table-wrap"><table><thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th></tr></thead>
+      <tbody>${E.movs.map((m) => `<tr><td>${U.fmtCurta(m.quando)}</td><td>${{ baixa: 'Baixa', compra: 'Compra', ajuste: 'Ajuste' }[m.tipo]}</td><td>${esc(m.texto)}</td></tr>`).join('')}</tbody></table></div>
+      <button class="btn btn-ghost btn-sm" id="reset" style="margin-top:12px">Restaurar estoque de exemplo</button></div>`;
+  }
+
+  function pedido() {
+    const itens = ITENS.filter((it) => E.qtd[it.id] <= it.min * 1.5).map((it) => ({ it, q: Math.ceil(it.ideal - E.qtd[it.id]) }));
+    const dlg = $('#dlg');
+    if (!itens.length) { dlg.innerHTML = '<h2 style="margin-top:0">Nada para comprar</h2><p>Todos os itens estão acima do nível de atenção.</p><button class="btn btn-primary" onclick="dlg.close()">Ok</button>'; return dlg.showModal(); }
+    const total = itens.reduce((t, x) => t + x.q * x.it.custo, 0);
+    const texto = `Olá! Pedido de materiais da ${S.CLINICA.nome}:\n` + itens.map((x) => `- ${x.it.nome}: ${x.q} ${x.it.un}`).join('\n') + '\nPodem confirmar prazo e valor? Obrigada!';
+    dlg.innerHTML = `<h2 style="margin-top:0">Pedido de compra</h2>
+      <div class="table-wrap"><table><thead><tr><th>Material</th><th>Comprar</th><th>Estimado</th></tr></thead><tbody>
+      ${itens.map((x) => `<tr><td>${x.it.nome}</td><td>${x.q} ${x.it.un}</td><td>${U.brl(x.q * x.it.custo)}</td></tr>`).join('')}</tbody></table></div>
+      <p><b>Total estimado: ${U.brl(total)}</b></p>
+      <label for="ptxt">Mensagem para o fornecedor</label><textarea id="ptxt" rows="6">${esc(texto)}</textarea>
+      <p class="muted" style="font-size:13px">Na versão real, o pedido pode sair por e-mail ou WhatsApp para o fornecedor, e a compra entra no caixa ao ser recebida.</p>
+      <div class="row-acts" style="justify-content:flex-end"><button class="btn btn-ghost" onclick="dlg.close()">Fechar</button><button class="btn btn-primary" id="receber">Marcar como recebido</button></div>`;
+    $('#receber').onclick = () => {
+      itens.forEach((x) => (E.qtd[x.it.id] = +(E.qtd[x.it.id] + x.q).toFixed(1)));
+      E.compras.push({ data: U.hoje(), total });
+      E.movs.unshift({ quando: U.hoje(), tipo: 'compra', texto: `Compra recebida: ${itens.length} item(ns), ${U.brl(total)}` });
+      salvar(); dlg.close(); render();
+    };
+    dlg.showModal();
+  }
+
+  function render() {
+    $('#view').innerHTML = { estoque: viewEstoque, caixa: viewCaixa, movs: viewMovs }[aba]();
+    document.querySelectorAll('[role=tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === aba)));
+  }
+
+  const dlg = $('#dlg');
+  document.addEventListener('click', (e) => {
+    const t = e.target.closest('button'); if (!t) return;
+    if (t.dataset.tab) { aba = t.dataset.tab; render(); }
+    else if (t.id === 'baixar') { const n = baixarConcluidos(); render(); if (!n) alert('Não há atendimentos novos para dar baixa.'); }
+    else if (t.id === 'pedido') pedido();
+    else if (t.id === 'reset') { E = seed(); salvar(); render(); }
+  });
+  document.addEventListener('demo:changed', render);
+  baixarConcluidos();
+  render();
+</script>
+</body>
+</html>

@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atendente WhatsApp com IA (demo)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .wrap { display: grid; grid-template-columns: 400px 1fr; gap: 24px; padding: 24px 0 48px; align-items: start; }
+  @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
+  h1 { font: 600 clamp(24px, 3vw, 32px) var(--font-display); margin-top: 24px; }
+
+  .phone { border-radius: 28px; overflow: hidden; border: 8px solid #1c2b2d; background: #efe7dd; height: min(720px, 80vh); display: flex; flex-direction: column; box-shadow: var(--shadow); }
+  .wa-head { background: #075e54; color: #fff; padding: 12px 14px; display: flex; gap: 10px; align-items: center; }
+  .wa-head .av { width: 38px; height: 38px; border-radius: 50%; background: #d6efeb; color: var(--primary); display: grid; place-items: center; font: 600 16px var(--font-display); }
+  .wa-head small { display: block; opacity: .8; font-size: 12px; }
+  .msgs { flex: 1; overflow-y: auto; padding: 14px 10px; display: flex; flex-direction: column; gap: 6px;
+    background-image: radial-gradient(rgba(0,0,0,.035) 1px, transparent 1px); background-size: 16px 16px; }
+  .msg { max-width: 82%; padding: 7px 10px 18px; border-radius: 10px; font-size: 14.5px; position: relative; white-space: pre-line; box-shadow: 0 1px 1px rgba(0,0,0,.08); }
+  .msg time { position: absolute; right: 8px; bottom: 3px; font-size: 10.5px; color: #667; }
+  .bot { background: #fff; align-self: flex-start; border-top-left-radius: 2px; }
+  .user { background: #d9fdd3; align-self: flex-end; border-top-right-radius: 2px; }
+  .sys { align-self: center; background: #fff8c5; font-size: 12px; padding: 4px 10px; border-radius: 8px; color: #6b5b00; }
+  .quick { display: flex; flex-wrap: wrap; gap: 6px; align-self: flex-start; max-width: 90%; }
+  .quick button { background: #fff; border: 1px solid #cfe3df; color: #0b6b62; border-radius: 16px; padding: 6px 12px; font: 500 13.5px var(--font); cursor: pointer; }
+  .quick button:hover { background: #e9f7f4; }
+  .typing { align-self: flex-start; background: #fff; border-radius: 10px; padding: 8px 12px; font-size: 13px; color: #667; }
+  .composer { display: flex; gap: 8px; padding: 8px; background: #f0f0f0; }
+  .composer input { border-radius: 20px; border: 0; }
+  .composer button { width: 42px; height: 42px; border-radius: 50%; border: 0; background: #00a884; color: #fff; font-size: 18px; cursor: pointer; flex: none; }
+
+  .panel { padding: 20px; }
+  .panel h2 { font-size: 18px; margin-bottom: 4px; }
+  .log { list-style: none; margin: 12px 0 0; padding: 0; max-height: 420px; overflow-y: auto; font-size: 13.5px; }
+  .log li { display: grid; grid-template-columns: 64px 1fr; gap: 8px; padding: 8px 0; border-bottom: 1px dashed var(--border); }
+  .log time { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .log .tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 6px; margin-right: 6px; background: var(--surface-2); }
+  .tag.ia { background: #ede9fe; color: #5b21b6; }
+  .tag.agenda { background: #dcfce7; color: var(--ok); }
+  .tag.wa { background: #d1fae5; color: #065f46; }
+  .tag.humano { background: #fee2e2; color: var(--danger); }
+  .sims { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .how { margin-top: 20px; font-size: 14px; }
+  .how ol { padding-left: 18px; margin: 6px 0 0; }
+</style>
+</head>
+<body>
+<div class="demo-banner">Demonstração de portfólio: atendente automático de WhatsApp para uma clínica fictícia. · <a href="../index.html">Ver todas as demos</a></div>
+
+<div class="container">
+  <h1>Atendente de WhatsApp com IA</h1>
+  <p class="muted" style="margin-top:-6px">Converse como se fosse um paciente: pergunte preços, peça para agendar, digite "falar com atendente". Ao lado, os <b>bastidores</b> mostram o que a automação faz em cada mensagem.</p>
+</div>
+
+<div class="container wrap">
+  <div class="phone" aria-label="Simulação de conversa no WhatsApp">
+    <div class="wa-head">
+      <div class="av">A</div>
+      <div><b>Clínica Aurora</b><small id="status">online</small></div>
+    </div>
+    <div class="msgs" id="msgs" aria-live="polite"></div>
+    <form class="composer" id="composer">
+      <label for="txt" class="sr-only">Mensagem</label>
+      <input id="txt" placeholder="Digite uma mensagem" autocomplete="off">
+      <button aria-label="Enviar">➤</button>
+    </form>
+  </div>
+
+  <div>
+    <div class="card panel">
+      <h2>Bastidores da automação</h2>
+      <p class="muted" style="margin:0;font-size:14px">Na versão real, cada mensagem passa pelo n8n, a IA (Claude) entende a intenção e consulta a agenda da clínica.</p>
+      <ul class="log" id="log"></ul>
+      <div class="sims">
+        <button class="btn btn-ghost btn-sm" id="sim-lembrete">Simular lembrete de 24h</button>
+        <button class="btn btn-ghost btn-sm" id="sim-orcamento">Simular follow-up de orçamento</button>
+        <button class="btn btn-ghost btn-sm" id="reiniciar">Reiniciar conversa</button>
+        <a class="btn btn-primary btn-sm" href="../gestao/index.html">Abrir painel da clínica</a>
+      </div>
+    </div>
+    <div class="card panel how">
+      <h2>Como funciona na versão real</h2>
+      <ol>
+        <li>O paciente manda mensagem no WhatsApp Business (API oficial).</li>
+        <li>O n8n recebe a mensagem e envia para a IA, junto com as regras da clínica (preços, horários, o que pode responder).</li>
+        <li>A IA identifica a intenção: dúvida, agendamento, remarcação ou urgência.</li>
+        <li>Para agendar, o fluxo consulta os horários livres e grava no sistema da clínica.</li>
+        <li>Casos sensíveis (dor, urgência, reclamação) vão para um humano na hora.</li>
+        <li>Lembretes de 24h e follow-up de orçamentos saem automaticamente.</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/store.js"></script>
+<script>
+  const S = DemoStore, U = S.util;
+  const $ = (s) => document.querySelector(s);
+  const msgs = $('#msgs'), log = $('#log');
+  const agora = () => new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+  const normal = (t) => t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+  let estado = { passo: 'menu', dados: {} };
+  let fila = Promise.resolve();
+
+  function bastidor(tag, texto) {
+    const li = document.createElement('li');
+    li.innerHTML = `<time>${agora()}</time><span><span class="tag ${tag}">${{ ia: 'IA', agenda: 'Agenda', wa: 'WhatsApp', humano: 'Humano', n8n: 'n8n' }[tag] || tag}</span>${texto}</span>`;
+    log.prepend(li);
+  }
+
+  function bolha(classe, texto) {
+    const d = document.createElement('div');
+    d.className = 'msg ' + classe;
+    d.textContent = texto;
+    if (classe !== 'sys') { const t = document.createElement('time'); t.textContent = agora(); d.appendChild(t); }
+    msgs.appendChild(d);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  function opcoes(lista) {
+    const q = document.createElement('div');
+    q.className = 'quick';
+    lista.forEach(([rotulo, valor]) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = rotulo;
+      b.onclick = () => { q.remove(); enviarUsuario(rotulo, valor ?? rotulo); };
+      q.appendChild(b);
+    });
+    msgs.appendChild(q);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  // Respostas do bot entram numa fila, com "digitando…", para parecer conversa.
+  function bot(texto, quick) {
+    fila = fila.then(async () => {
+      $('#status').textContent = 'digitando…';
+      const t = document.createElement('div'); t.className = 'typing'; t.textContent = 'digitando…';
+      msgs.appendChild(t); msgs.scrollTop = msgs.scrollHeight;
+      await esperar(Math.min(1200, 350 + texto.length * 8));
+      t.remove(); $('#status').textContent = 'online';
+      bolha('bot', texto);
+      if (quick) opcoes(quick);
+    });
+    return fila;
+  }
+
+  const MENU = [['📅 Agendar', 'agendar'], ['💰 Preços', 'precos'], ['📍 Endereço e horário', 'endereco'], ['🙋 Falar com atendente', 'humano']];
+
+  function menu(intro = 'Como posso ajudar?') {
+    estado = { passo: 'menu', dados: {} };
+    bot(intro, MENU);
+  }
+
+  // Simula a IA: classifica a intenção a partir do texto livre.
+  function intencao(t) {
+    const n = normal(t);
+    if (/^(menu|inicio|voltar|oi|ola|bom dia|boa tarde|boa noite)\b/.test(n)) return 'saudacao';
+    if (/dor|urgen|sangr|incha|quebrou|emergen/.test(n)) return 'urgencia';
+    if (/atendente|humano|pessoa|falar com/.test(n)) return 'humano';
+    if (/agend|marcar|horario livre|consulta|vaga/.test(n)) return 'agendar';
+    if (/remarc|cancel|desmarc/.test(n)) return 'remarcar';
+    if (/endere|onde fica|localiza|horario de funcion|abre|fecha/.test(n)) return 'endereco';
+    if (/conveni|plano de saude|unimed|amil/.test(n)) return 'convenio';
+    if (/parcel|cartao|pix|pagamento/.test(n)) return 'pagamento';
+    const sv = S.SERVICOS.find((s) => n.includes(normal(s.nome).split(' ')[0]) || (s.id === 'botox' && /botox|toxina/.test(n)));
+    if (sv) return 'servico:' + sv.id;
+    if (/preco|valor|quanto|custa|orcamento/.test(n)) return 'precos';
+    return 'desconhecida';
+  }
+
+  function responderIntencao(it) {
+    bastidor('ia', `Intenção identificada: <b>${it.replace('servico:', 'serviço: ')}</b>`);
+    if (it === 'saudacao') return menu(`Olá! 👋 Aqui é a assistente virtual da ${S.CLINICA.nome}. Como posso ajudar?`);
+    if (it === 'agendar') return iniciarAgendamento();
+    if (it === 'precos') {
+      const txt = S.SERVICOS.map((s) => `• ${s.nome}: ${s.precoTxt || 'a partir de ' + U.brl(s.preco)}`).join('\n');
+      return bot(`Valores de referência:\n${txt}\n\nO valor final é definido na avaliação, que é gratuita.`, [['📅 Agendar avaliação', 'agendar:avaliacao'], ['Voltar ao menu', 'menu']]);
+    }
+    if (it.startsWith('servico:')) {
+      const s = S.servico(it.split(':')[1]);
+      return bot(`${s.nome} (${s.area}): ${s.precoTxt || 'a partir de ' + U.brl(s.preco)}, duração de cerca de ${s.duracao} min.\nQuer agendar?`, [['Sim, agendar', 'agendar:' + s.id], ['Ver outros preços', 'precos']]);
+    }
+    if (it === 'endereco') return bot(`📍 ${S.CLINICA.endereco}\n🕗 ${S.CLINICA.horarioTxt}`, [['📅 Agendar', 'agendar'], ['Voltar ao menu', 'menu']]);
+    if (it === 'convenio') return bot('A clínica atende particular e emite recibo para você pedir reembolso ao seu plano. 😉', [['💰 Ver preços', 'precos'], ['📅 Agendar', 'agendar']]);
+    if (it === 'pagamento') return bot('Aceitamos Pix, débito e crédito. Tratamentos estéticos podem ser parcelados em até 10x.', [['📅 Agendar', 'agendar'], ['Voltar ao menu', 'menu']]);
+    if (it === 'urgencia') {
+      bastidor('humano', 'Mensagem marcada como <b>urgência</b>: recepção notificada');
+      return bot('Sinto muito que esteja passando por isso. 🙏 Já avisei a recepção, e uma pessoa da equipe vai te responder em instantes.\nSe for algo grave, procure um pronto-atendimento.');
+    }
+    if (it === 'humano') {
+      bastidor('humano', 'Conversa transferida para a recepção (a IA para de responder)');
+      estado.passo = 'humano';
+      return bot('Certo! Transferi para a nossa recepção. Alguém da equipe responde aqui mesmo, em horário comercial. 😊', [['Voltar ao menu', 'menu']]);
+    }
+    if (it === 'remarcar') return bot('Para remarcar, me diga o novo dia que prefere e eu vejo os horários. Vamos lá?', [['📅 Escolher novo horário', 'agendar'], ['Falar com atendente', 'humano']]);
+    bot('Não tenho certeza se entendi. 🤔 Posso ajudar com estas opções:', MENU);
+  }
+
+  function iniciarAgendamento(servicoId) {
+    estado = { passo: 'servico', dados: {} };
+    if (servicoId) return escolherServico(servicoId);
+    bot('Ótimo! Qual serviço você quer agendar?', S.SERVICOS.map((s) => [s.nome, 'svc:' + s.id]));
+  }
+
+  function escolherServico(id) {
+    estado.dados.servicoId = id; estado.passo = 'data';
+    const dias = S.proximosDiasAbertos(5).filter((d) => S.slots(d, id).length);
+    bastidor('agenda', `Consultou a agenda: ${dias.length} dias com vagas para <b>${S.servico(id).nome}</b>`);
+    bot(`${S.servico(id).nome}, anotado. Qual dia fica melhor?`, dias.map((d) => [U.fmtData(d), 'dia:' + d]));
+  }
+
+  function escolherDia(d) {
+    estado.dados.data = d; estado.passo = 'hora';
+    const sl = S.slots(d, estado.dados.servicoId).slice(0, 8);
+    bot(`Horários livres em ${U.fmtData(d)}:`, sl.map((x) => [x.hora, 'hora:' + x.hora]).concat([['Outro dia', 'svc:' + estado.dados.servicoId]]));
+  }
+
+  function escolherHora(h) {
+    estado.dados.hora = h; estado.passo = 'nome';
+    bot('Perfeito! Para finalizar, qual o seu nome completo?');
+  }
+
+  function confirmar() {
+    const { servicoId, data, hora, nome } = estado.dados;
+    estado.passo = 'confirmar';
+    bot(`Confere para mim:\n\n📋 ${S.servico(servicoId).nome}\n📅 ${U.fmtData(data)} às ${hora}\n👤 ${nome}`, [['✅ Confirmar', 'confirmar'], ['Trocar horário', 'dia:' + data], ['Cancelar', 'menu']]);
+  }
+
+  function gravar() {
+    const { servicoId, data, hora, nome } = estado.dados;
+    try {
+      const ag = S.agendar({ nome, tel: '(11) 98888-' + String(Math.floor(Math.random() * 9000) + 1000), servicoId, data, hora, origem: 'whatsapp', status: 'confirmado' });
+      bastidor('agenda', `Agendamento <b>#${ag.id}</b> gravado no sistema (${S.profissional(ag.proId).nome})`);
+      bastidor('n8n', 'Lembrete de 24h programado');
+      bot(`Agendado! 🎉\n${S.servico(servicoId).nome} com ${S.profissional(ag.proId).nome}, ${U.fmtData(data)} às ${hora}.\n\nVocê vai receber um lembrete um dia antes. Até lá!`, [['Voltar ao menu', 'menu']]);
+      estado = { passo: 'menu', dados: {} };
+    } catch (e) {
+      bastidor('agenda', 'Conflito: o horário foi ocupado por outra pessoa');
+      bot('Ops, esse horário acabou de ser preenchido. Vamos escolher outro?');
+      escolherDia(data);
+    }
+  }
+
+  function processar(valor, textoLivre) {
+    if (valor === 'menu') return menu();
+    if (valor === 'agendar') return iniciarAgendamento();
+    if (valor.startsWith('agendar:')) return iniciarAgendamento(valor.split(':')[1]);
+    if (valor === 'precos' || valor === 'endereco' || valor === 'humano') return responderIntencao(valor);
+    if (valor.startsWith('svc:')) return escolherServico(valor.slice(4));
+    if (valor.startsWith('dia:')) return escolherDia(valor.slice(4));
+    if (valor.startsWith('hora:')) return escolherHora(valor.slice(5));
+    if (valor === 'confirmar') return gravar();
+    if (valor.startsWith('lembrete:')) {
+      const [, acao, id] = valor.split(':');
+      if (acao === 'ok') {
+        S.atualizarAgendamento(Number(id), { status: 'confirmado' }, 'whatsapp');
+        bastidor('agenda', `Agendamento #${id} marcado como <b>confirmado</b>`);
+        return bot('Presença confirmada! ✅ Te esperamos.');
+      }
+      return iniciarAgendamento(S.load().agendamentos.find((a) => a.id === Number(id)).servicoId);
+    }
+    if (valor.startsWith('orc:')) {
+      const [, acao, id] = valor.split(':');
+      const etapa = acao === 'sim' ? 'negociacao' : 'perdido';
+      S.atualizarOrcamento(Number(id), { etapa, ultimoContato: U.hoje() }, 'whatsapp');
+      bastidor('agenda', `Orçamento #${id} movido para <b>${S.ETAPAS_ORCAMENTO[etapa]}</b>`);
+      return bot(acao === 'sim' ? 'Que bom! Vou pedir para a equipe te chamar com as condições de pagamento. 💬' : 'Tudo bem, obrigada por avisar! Se mudar de ideia, é só chamar. 😊');
+    }
+
+    // texto livre
+    if (estado.passo === 'nome') {
+      if (textoLivre.trim().length < 3) return bot('Pode me dizer seu nome completo?');
+      estado.dados.nome = textoLivre.trim();
+      return confirmar();
+    }
+    if (estado.passo === 'humano') {
+      bastidor('humano', 'Mensagem encaminhada para a recepção');
+      return bot('Sua mensagem foi encaminhada para a recepção. 👍', [['Voltar ao menu', 'menu']]);
+    }
+    responderIntencao(intencao(textoLivre));
+  }
+
+  function enviarUsuario(texto, valor) {
+    bolha('user', texto);
+    bastidor('wa', `Mensagem recebida: “${texto.replace(/</g, '&lt;')}”`);
+    processar(valor ?? '', texto);
+  }
+
+  $('#composer').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const t = $('#txt').value.trim();
+    if (!t) return;
+    $('#txt').value = '';
+    document.querySelectorAll('.quick').forEach((q) => q.remove());
+    enviarUsuario(t, '');
+  });
+
+  $('#sim-lembrete').onclick = () => {
+    const amanha = U.iso(U.addDays(new Date(), 1));
+    const ag = S.load().agendamentos
+      .filter((a) => a.data >= amanha && (a.status === 'pendente' || a.status === 'confirmado'))
+      .sort((a, b) => (a.data + a.hora).localeCompare(b.data + b.hora))[0];
+    if (!ag) return bot('(Não há agendamentos futuros para lembrar.)');
+    bolha('sys', '⏰ Disparo automático: lembrete de 24h');
+    bastidor('n8n', `Rotina diária: lembrete do agendamento #${ag.id}`);
+    const p = S.paciente(ag.pacienteId);
+    bot(`Olá, ${p.nome.split(' ')[0]}! 😊 Passando para lembrar do seu horário:\n\n📋 ${S.servico(ag.servicoId).nome}\n📅 ${U.fmtData(ag.data)} às ${ag.hora}\n\nPosso confirmar sua presença?`, [['✅ Confirmar', 'lembrete:ok:' + ag.id], ['🔁 Remarcar', 'lembrete:remarcar:' + ag.id]]);
+  };
+
+  $('#sim-orcamento').onclick = () => {
+    const o = S.load().orcamentos
+      .filter((x) => x.etapa === 'enviado' || x.etapa === 'negociacao')
+      .sort((a, b) => a.ultimoContato.localeCompare(b.ultimoContato))[0];
+    if (!o) return bot('(Não há orçamentos em aberto.)');
+    const dias = U.diasEntre(o.ultimoContato, U.hoje());
+    bolha('sys', `⏰ Disparo automático: orçamento parado há ${dias} dias`);
+    bastidor('ia', `IA escreveu um follow-up personalizado para o orçamento #${o.id}`);
+    const p = S.paciente(o.pacienteId);
+    bot(`Oi, ${p.nome.split(' ')[0]}! Tudo bem? Aqui é da ${S.CLINICA.nome}. 😊\nVi que ficou alguma dúvida sobre o seu plano de ${o.descricao.toLowerCase()} (${U.brl(o.valor)}). Conseguimos parcelar em até 10x. Quer que a equipe te explique as condições?`, [['Quero saber', 'orc:sim:' + o.id], ['Não tenho interesse', 'orc:nao:' + o.id]]);
+  };
+
+  $('#reiniciar').onclick = () => { msgs.innerHTML = ''; log.innerHTML = ''; fila = Promise.resolve(); inicio(); };
+
+  function inicio() {
+    bolha('sys', 'Hoje');
+    bastidor('n8n', 'Fluxo de atendimento iniciado');
+    menu(`Olá! 👋 Aqui é a assistente virtual da ${S.CLINICA.nome}.\nPosso tirar dúvidas, informar preços e agendar seu horário.`);
+  }
+  inicio();
+</script>
+</body>
+</html>

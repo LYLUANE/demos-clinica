@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Automação de leads da clínica (demo)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  h1 { font: 600 clamp(24px, 3vw, 32px) var(--font-display); margin-top: 24px; }
+  .compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 16px; margin: 16px 0 24px; }
+  .compare .card { padding: 18px; }
+  .compare h2 { font-size: 17px; }
+  .compare ol { margin: 0; padding-left: 18px; font-size: 15px; }
+  .antes { border-top: 4px solid #e8a87c; } .depois { border-top: 4px solid var(--primary); }
+  .grid { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 20px; align-items: start; }
+  @media (max-width: 900px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+  .box { padding: 18px; }
+  .box h2 { font-size: 17px; }
+  form { display: grid; gap: 12px; }
+
+  .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 16px; }
+  .node { border: 2px solid var(--border); border-radius: 12px; padding: 10px 12px; font-size: 13px; font-weight: 600; background: var(--surface); transition: .25s; min-width: 108px; text-align: center; }
+  .node small { display: block; font-weight: 400; color: var(--muted); }
+  .node.ativo { border-color: var(--primary); background: var(--primary-50); transform: translateY(-2px); }
+  .node.feito { border-color: var(--ok); }
+  .seta { color: var(--muted); }
+  .log { font: 13px/1.6 ui-monospace, Consolas, monospace; background: #13201f; color: #cfe7e3; border-radius: 12px; padding: 12px; min-height: 120px; max-height: 200px; overflow-y: auto; }
+  .log .ok { color: #7ee2b8; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { background: #e9f5ec; font-size: 12px; }
+  tr.novo td { background: #fffbe6; }
+  .email { border: 1px solid var(--border); border-radius: 12px; padding: 14px; font-size: 14px; background: #fcfdfd; white-space: pre-line; }
+  .email .h { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+  .report { white-space: pre-line; font-size: 14px; }
+  .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 16px; margin-top: 16px; }
+</style>
+</head>
+<body>
+<div class="demo-banner">Demonstração de portfólio: automação de leads para uma clínica fictícia. · <a href="../index.html">Ver todas as demos</a></div>
+
+<main class="container" style="padding-bottom:48px">
+  <h1>Automação: do formulário ao relatório</h1>
+  <p class="muted" style="margin-top:-6px">Quando alguém pede avaliação no site, a automação registra na planilha, manda e-mail de boas-vindas, avisa a recepção e, toda segunda, entrega um relatório. Ninguém precisa copiar e colar.</p>
+
+  <div class="compare">
+    <div class="card antes"><h2>Antes (manual)</h2><ol>
+      <li>Recepção abre o e-mail do formulário</li><li>Copia os dados para a planilha</li><li>Escreve o e-mail de boas-vindas</li><li>Avisa a equipe no grupo</li><li>Monta o relatório na mão no fim do mês</li></ol>
+      <p class="muted" style="font-size:13px;margin-bottom:0">Risco: lead esquecido, dado digitado errado, resposta só no dia seguinte.</p></div>
+    <div class="card depois"><h2>Depois (automático)</h2><ol>
+      <li>Formulário enviado</li><li>Linha criada na planilha na hora</li><li>E-mail personalizado em segundos</li><li>Aviso no WhatsApp da recepção</li><li>Relatório semanal pronto toda segunda</li></ol>
+      <p class="muted" style="font-size:13px;margin-bottom:0">Na versão real: n8n + Google Sheets + Gmail + WhatsApp. <a href="../n8n/index.html">Ver os workflows</a></p></div>
+  </div>
+
+  <div class="grid">
+    <div class="card box">
+      <h2>1. Formulário do site</h2>
+      <form id="f">
+        <div><label for="nome">Nome</label><input id="nome" required placeholder="Nome fictício"></div>
+        <div><label for="email">E-mail</label><input id="email" type="email" required placeholder="nome@exemplo.com"></div>
+        <div><label for="int">Interesse</label><select id="int"><option>Clareamento</option><option>Lentes de contato dental</option><option>Harmonização</option><option>Limpeza de pele</option><option>Avaliação geral</option></select></div>
+        <div><label for="orig">Como conheceu a clínica?</label><select id="orig"><option>Instagram</option><option>Google</option><option>Indicação</option><option>Passou na frente</option></select></div>
+        <button class="btn btn-primary">Enviar pedido de avaliação</button>
+        <button type="button" class="btn btn-ghost" id="auto">Preencher com dados de exemplo</button>
+      </form>
+    </div>
+
+    <div>
+      <div class="card box">
+        <h2>2. O que a automação faz</h2>
+        <div class="flow" id="flow">
+          <div class="node" data-n="0">Formulário<small>gatilho</small></div><span class="seta">→</span>
+          <div class="node" data-n="1">Planilha<small>nova linha</small></div><span class="seta">→</span>
+          <div class="node" data-n="2">E-mail<small>boas-vindas</small></div><span class="seta">→</span>
+          <div class="node" data-n="3">WhatsApp<small>aviso à recepção</small></div>
+        </div>
+        <div class="log" id="log"><span class="muted">Aguardando um formulário…</span></div>
+      </div>
+
+      <div class="two">
+        <div class="card box"><h2>📊 Planilha de leads</h2><div class="table-wrap"><table><thead><tr><th>Data</th><th>Nome</th><th>Interesse</th><th>Origem</th><th>Status</th></tr></thead><tbody id="planilha"></tbody></table></div></div>
+        <div class="card box"><h2>✉️ Último e-mail enviado</h2><div class="email" id="email-prev"><span class="muted">Nenhum ainda.</span></div></div>
+      </div>
+
+      <div class="card box" style="margin-top:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h2 style="margin:0">📈 Relatório semanal (toda segunda, 8h)</h2><button class="btn btn-ghost btn-sm" id="rel">Gerar agora</button></div>
+        <div class="report" id="report"><p class="muted">Clique em "Gerar agora" para ver o relatório que a recepção recebe por e-mail.</p></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="../assets/store.js"></script>
+<script>
+  const U = DemoStore.util;
+  const $ = (s) => document.querySelector(s);
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const KEY = 'demoClinica.leads.v1';
+  const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  function seed() {
+    const ex = [['Camila Torres', 'Clareamento', 'Instagram', 6, 'Agendou'], ['Rafael Gomes', 'Harmonização', 'Google', 5, 'Contatado'], ['Juliana Prates', 'Lentes de contato dental', 'Indicação', 4, 'Agendou'],
+      ['Pedro Alves', 'Limpeza de pele', 'Instagram', 3, 'Novo'], ['Sofia Lima', 'Clareamento', 'Instagram', 2, 'Contatado'], ['Lucas Vieira', 'Avaliação geral', 'Google', 1, 'Novo']];
+    return ex.map(([nome, interesse, origem, d, status]) => ({ data: U.iso(U.addDays(new Date(), -d)), nome, interesse, origem, status }));
+  }
+  let leads;
+  try { leads = JSON.parse(localStorage.getItem(KEY)); } catch (e) { leads = null; }
+  if (!Array.isArray(leads)) leads = seed();
+  const salvar = () => { try { localStorage.setItem(KEY, JSON.stringify(leads)); } catch (e) {} };
+
+  function renderPlanilha(destacar) {
+    $('#planilha').innerHTML = [...leads].reverse().map((l, i) => `<tr class="${destacar && i === 0 ? 'novo' : ''}"><td>${U.fmtCurta(l.data)}</td><td>${esc(l.nome)}</td><td>${esc(l.interesse)}</td><td>${esc(l.origem)}</td><td>${esc(l.status)}</td></tr>`).join('');
+  }
+
+  function log(txt, ok) { const el = $('#log'); if (el.querySelector('.muted')) el.innerHTML = ''; el.innerHTML += `<div class="${ok ? 'ok' : ''}">${new Date().toLocaleTimeString('pt-BR')}  ${txt}</div>`; el.scrollTop = el.scrollHeight; }
+  function ativar(n) { document.querySelectorAll('.node').forEach((x) => { const i = Number(x.dataset.n); x.classList.toggle('ativo', i === n); if (i < n) x.classList.add('feito'); }); }
+
+  const DICAS = { 'Clareamento': 'Evite café e vinho nas 48h antes da avaliação, assim conseguimos ver a cor real dos dentes.', 'Lentes de contato dental': 'Na avaliação fazemos fotos e um planejamento digital do sorriso.', 'Harmonização': 'Traga fotos de referência do resultado que você imagina.', 'Limpeza de pele': 'Venha sem maquiagem, se possível.', 'Avaliação geral': 'Se tiver exames ou radiografias recentes, traga com você.' };
+
+  $('#f').onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = e.submitter; btn.disabled = true;
+    document.querySelectorAll('.node').forEach((x) => x.classList.remove('feito', 'ativo'));
+    $('#log').innerHTML = '';
+    const lead = { data: U.hoje(), nome: $('#nome').value.trim(), email: $('#email').value.trim(), interesse: $('#int').value, origem: $('#orig').value, status: 'Novo' };
+    ativar(0); log(`Webhook recebeu o formulário de ${esc(lead.nome)}`); await esperar(700);
+    ativar(1); leads.push(lead); salvar(); renderPlanilha(true); log('Google Sheets: linha adicionada na planilha "Leads"', true); await esperar(800);
+    ativar(2);
+    $('#email-prev').innerHTML = `<div class="h">Para: ${esc(lead.email)} · Assunto: Recebemos seu pedido de avaliação 😊</div>Olá, ${esc(lead.nome.split(' ')[0])}!\n\nRecebemos seu interesse em <b>${esc(lead.interesse.toLowerCase())}</b>. Nossa equipe vai entrar em contato hoje para combinar o melhor horário.\n\nDica: ${esc(DICAS[lead.interesse])}\n\nAté breve,\nEquipe ${DemoStore.CLINICA.nome}`;
+    log('Gmail: e-mail de boas-vindas enviado', true); await esperar(800);
+    ativar(3); log(`WhatsApp: "Novo lead: ${esc(lead.nome)} (${esc(lead.interesse)}, via ${esc(lead.origem)})" enviado à recepção`, true); await esperar(600);
+    document.querySelectorAll('.node').forEach((x) => x.classList.replace('ativo', 'feito'));
+    log('Fluxo concluído em menos de 5 segundos ✓', true);
+    btn.disabled = false; e.target.reset();
+  };
+
+  $('#auto').onclick = () => {
+    const nomes = ['Marina Duarte', 'Thiago Sales', 'Beatriz Campos', 'André Moreira'];
+    const n = nomes[Math.floor(Math.random() * nomes.length)];
+    $('#nome').value = n; $('#email').value = n.split(' ')[0].toLowerCase() + '@exemplo.com';
+    $('#int').selectedIndex = Math.floor(Math.random() * 5); $('#orig').selectedIndex = Math.floor(Math.random() * 4);
+  };
+
+  $('#rel').onclick = () => {
+    const ini = U.iso(U.addDays(new Date(), -7));
+    const sem = leads.filter((l) => l.data >= ini);
+    const cont = (k) => sem.reduce((m, l) => (m[l[k]] = (m[l[k]] || 0) + 1, m), {});
+    const fmt = (o) => Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) => `• ${k}: ${v}`).join('\n');
+    const ag = sem.filter((l) => l.status === 'Agendou').length;
+    const novos = sem.filter((l) => l.status === 'Novo');
+    $('#report').textContent = `Relatório de leads, de ${U.fmtCurta(ini)} a ${U.fmtCurta(U.hoje())}\n\n` +
+      `Total de pedidos de avaliação: ${sem.length}\nViraram agendamento: ${ag} (${Math.round(ag / Math.max(1, sem.length) * 100)}%)\n\n` +
+      `Por interesse:\n${fmt(cont('interesse'))}\n\nPor origem:\n${fmt(cont('origem'))}\n\n` +
+      (novos.length ? `⚠ Ainda sem contato: ${novos.map((l) => l.nome).join(', ')}` : '✓ Todos os leads foram contatados.');
+  };
+
+  renderPlanilha(false);
+</script>
+</body>
+</html>

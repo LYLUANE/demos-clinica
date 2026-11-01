@@ -1,0 +1,176 @@
+{
+  "name": "Clínica · Lembretes de 24h e follow-up de orçamentos",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Rotina diária da clínica (9h, seg. a sáb.)\n**Ramo de cima:** busca os agendamentos de amanhã ainda não confirmados e manda o lembrete no WhatsApp (modelo aprovado pela Meta, com botões Confirmar e Remarcar).\n\n**Ramo de baixo:** busca orçamentos sem contato há 5 dias ou mais, pede para a Claude escrever um follow-up personalizado, envia e atualiza a data do último contato.\n\n**Configurar:** nó *Configuração* + credenciais *Supabase (apikey)*, *Anthropic (x-api-key)* e *WhatsApp (Bearer)*.",
+        "height": 300,
+        "width": 560
+      },
+      "id": "b2f0c002-0000-4000-8000-000000000001",
+      "name": "Sobre este fluxo",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-140, -380]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "cronExpression", "expression": "0 9 * * 1-6" }
+          ]
+        }
+      },
+      "id": "b2f0c002-0000-4000-8000-000000000002",
+      "name": "Todo dia às 9h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "c1", "name": "supabaseUrl", "value": "https://SEU-PROJETO.supabase.co", "type": "string" },
+            { "id": "c2", "name": "whatsappPhoneId", "value": "COLE_AQUI_O_PHONE_NUMBER_ID", "type": "string" },
+            { "id": "c3", "name": "amanha", "value": "={{ $now.plus({ days: 1 }).toFormat('yyyy-MM-dd') }}", "type": "string" },
+            { "id": "c4", "name": "limiteParado", "value": "={{ $now.minus({ days: 5 }).toFormat('yyyy-MM-dd') }}", "type": "string" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b2f0c002-0000-4000-8000-000000000003",
+      "name": "Configuração",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.supabaseUrl }}/rest/v1/agendamentos?data=eq.{{ $json.amanha }}&status=eq.pendente&select=id,hora,servico,pacientes(nome,telefone)",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "b2f0c002-0000-4000-8000-000000000004",
+      "name": "Agendamentos de amanhã",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, -120]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $('Configuração').first().json.whatsappPhoneId }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.pacientes.telefone, type: 'template', template: { name: 'lembrete_consulta', language: { code: 'pt_BR' }, components: [{ type: 'body', parameters: [ { type: 'text', text: $json.pacientes.nome.split(' ')[0] }, { type: 'text', text: $json.servico }, { type: 'text', text: $json.hora } ] }] } }) }}",
+        "options": {}
+      },
+      "id": "b2f0c002-0000-4000-8000-000000000005",
+      "name": "Enviar lembrete",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, -120]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.supabaseUrl }}/rest/v1/orcamentos?etapa=in.(enviado,negociacao)&ultimo_contato=lt.{{ $json.limiteParado }}&select=id,descricao,valor,ultimo_contato,pacientes(nome,telefone)",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "b2f0c002-0000-4000-8000-000000000006",
+      "name": "Orçamentos parados",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 140]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const o = $json;\nconst prompt = `Escreva uma mensagem curta de WhatsApp (até 3 frases), gentil e sem pressão, da Clínica Aurora para ${o.pacientes.nome.split(' ')[0]}, retomando o orçamento de \"${o.descricao}\" (R$ ${o.valor}). Mencione que é possível parcelar em até 10x e termine com uma pergunta. Responda só com o texto da mensagem.`;\nreturn { json: { ...o, pedidoIA: { model: 'claude-haiku-5-5', max_tokens: 300, messages: [{ role: 'user', content: prompt }] } } };"
+      },
+      "id": "b2f0c002-0000-4000-8000-000000000007",
+      "name": "Montar pedido para a IA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 140]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "anthropic-version", "value": "2023-06-01" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.pedidoIA) }}",
+        "options": {}
+      },
+      "id": "b2f0c002-0000-4000-8000-000000000008",
+      "name": "IA: escrever follow-up",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [920, 140]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $('Configuração').first().json.whatsappPhoneId }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $('Montar pedido para a IA').item.json.pacientes.telefone, type: 'text', text: { body: $json.content[0].text } }) }}",
+        "options": {}
+      },
+      "id": "b2f0c002-0000-4000-8000-000000000009",
+      "name": "Enviar follow-up",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1140, 140]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $('Configuração').first().json.supabaseUrl }}/rest/v1/orcamentos?id=eq.{{ $('Montar pedido para a IA').item.json.id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ ultimo_contato: $now.toFormat('yyyy-MM-dd') }) }}",
+        "options": {}
+      },
+      "id": "b2f0c002-0000-4000-8000-000000000010",
+      "name": "Atualizar último contato",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1360, 140]
+    }
+  ],
+  "connections": {
+    "Todo dia às 9h": { "main": [[{ "node": "Configuração", "type": "main", "index": 0 }]] },
+    "Configuração": {
+      "main": [[
+        { "node": "Agendamentos de amanhã", "type": "main", "index": 0 },
+        { "node": "Orçamentos parados", "type": "main", "index": 0 }
+      ]]
+    },
+    "Agendamentos de amanhã": { "main": [[{ "node": "Enviar lembrete", "type": "main", "index": 0 }]] },
+    "Orçamentos parados": { "main": [[{ "node": "Montar pedido para a IA", "type": "main", "index": 0 }]] },
+    "Montar pedido para a IA": { "main": [[{ "node": "IA: escrever follow-up", "type": "main", "index": 0 }]] },
+    "IA: escrever follow-up": { "main": [[{ "node": "Enviar follow-up", "type": "main", "index": 0 }]] },
+    "Enviar follow-up": { "main": [[{ "node": "Atualizar último contato", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "pinData": {}
+}

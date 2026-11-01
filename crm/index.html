@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assistente de IA no CRM (demo)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  h1 { font: 600 clamp(24px, 3vw, 32px) var(--font-display); margin-top: 24px; }
+  .wrap { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 20px; padding: 8px 0 48px; align-items: start; }
+  @media (max-width: 960px) { .wrap { grid-template-columns: minmax(0, 1fr); } }
+  .box { padding: 18px; }
+  .box h2 { font-size: 17px; margin-bottom: 10px; }
+  .alertas { display: grid; gap: 10px; }
+  .al { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 12px; border: 1px solid var(--border); border-radius: 12px; }
+  .al .ic { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--surface-2); }
+  .al.alta .ic { background: #fee2e2; } .al.media .ic { background: #fef3c7; } .al.baixa .ic { background: #e0f2fe; }
+  .al small { color: var(--muted); display: block; }
+  @media (max-width: 520px) { .al { grid-template-columns: 34px minmax(0, 1fr); } .al .btn { grid-column: 2; justify-self: start; } }
+
+  .chat { display: flex; flex-direction: column; height: 600px; }
+  .chat-msgs { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px; }
+  .m { padding: 10px 12px; border-radius: 12px; font-size: 14.5px; max-width: 92%; white-space: pre-line; }
+  .m.u { align-self: flex-end; background: var(--primary); color: #fff; border-bottom-right-radius: 4px; }
+  .m.a { align-self: flex-start; background: var(--surface-2); border-bottom-left-radius: 4px; }
+  .m.a .fonte { display: block; margin-top: 6px; font-size: 12px; color: var(--muted); }
+  .sug { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+  .sug button { border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 6px 12px; font: 500 13px var(--font); cursor: pointer; color: var(--primary); }
+  .chat form { display: flex; gap: 8px; }
+  dialog { border: 0; border-radius: 18px; padding: 24px; width: min(520px, 100% - 32px); }
+  dialog::backdrop { background: rgba(10, 25, 25, .45); }
+</style>
+</head>
+<body>
+<div class="demo-banner">Demonstração de portfólio: assistente de IA dentro do CRM de uma clínica fictícia. · <a href="../index.html">Ver todas as demos</a></div>
+
+<div class="container">
+  <h1>Assistente de IA no CRM</h1>
+  <p class="muted" style="margin-top:-6px">A IA lê os dados da clínica (agenda, pacientes e orçamentos), aponta quem precisa de contato hoje e responde perguntas em português. Os dados são os mesmos do <a href="../gestao/index.html">painel</a>.</p>
+</div>
+
+<div class="container wrap">
+  <div class="card box">
+    <h2>📌 Prioridades de hoje (geradas pela IA)</h2>
+    <div class="alertas" id="alertas"></div>
+  </div>
+  <div class="card box chat">
+    <h2>💬 Pergunte ao assistente</h2>
+    <div class="chat-msgs" id="msgs" aria-live="polite"></div>
+    <div class="sug" id="sug"></div>
+    <form id="f"><label for="q" class="sr-only">Pergunta</label><input id="q" placeholder="Ex.: quanto temos em orçamentos abertos?" autocomplete="off"><button class="btn btn-primary">Enviar</button></form>
+  </div>
+</div>
+
+<dialog id="dlg"></dialog>
+
+<script src="../assets/store.js"></script>
+<script>
+  const S = DemoStore, U = S.util;
+  const $ = (s) => document.querySelector(s);
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const norm = (t) => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const primeiro = (n) => n.split(' ')[0];
+
+  // Análise que, na versão real, a IA faz sobre os dados do CRM.
+  function analisar() {
+    const d = S.load(), hj = U.hoje(), amanha = U.iso(U.addDays(new Date(), 1));
+    const out = [];
+    d.orcamentos.filter((o) => ['enviado', 'negociacao'].includes(o.etapa)).forEach((o) => {
+      const dias = U.diasEntre(o.ultimoContato, hj);
+      if (dias >= 5) out.push({ nivel: o.valor >= 3000 ? 'alta' : 'media', ic: '💰', pacienteId: o.pacienteId, tipo: 'orcamento', ref: o,
+        titulo: `${S.paciente(o.pacienteId).nome}: orçamento parado há ${dias} dias`, det: `${o.descricao} · ${U.brl(o.valor)}` });
+    });
+    d.agendamentos.filter((a) => a.data === amanha && a.status === 'pendente').forEach((a) => out.push({ nivel: 'alta', ic: '📅', pacienteId: a.pacienteId, tipo: 'confirmar', ref: a,
+      titulo: `${S.paciente(a.pacienteId).nome}: confirmar horário de amanhã`, det: `${S.servico(a.servicoId).nome} às ${a.hora}` }));
+    const faltosos = {};
+    d.agendamentos.filter((a) => a.status === 'faltou').forEach((a) => (faltosos[a.pacienteId] = (faltosos[a.pacienteId] || 0) + 1));
+    Object.entries(faltosos).forEach(([pid, n]) => {
+      const temFuturo = d.agendamentos.some((a) => a.pacienteId === pid && a.data >= hj && a.status !== 'cancelado');
+      if (!temFuturo) out.push({ nivel: 'media', ic: '🔁', pacienteId: pid, tipo: 'faltou',
+        titulo: `${S.paciente(pid).nome}: faltou e não remarcou`, det: `${n} falta(s), nenhum horário futuro` });
+    });
+    d.pacientes.forEach((p) => {
+      const ags = d.agendamentos.filter((a) => a.pacienteId === p.id);
+      const temFuturo = ags.some((a) => a.data >= hj && a.status !== 'cancelado');
+      const ultima = ags.filter((a) => a.status === 'concluido').sort((a, b) => b.data.localeCompare(a.data))[0];
+      if (!temFuturo && ultima && U.diasEntre(ultima.data, hj) >= 10 && !out.some((x) => x.pacienteId === p.id))
+        out.push({ nivel: 'baixa', ic: '✨', pacienteId: p.id, tipo: 'retorno',
+          titulo: `${p.nome}: sugerir retorno`, det: `última visita em ${U.fmtCurta(ultima.data)} (${S.servico(ultima.servicoId).nome})` });
+    });
+    const ordem = { alta: 0, media: 1, baixa: 2 };
+    return out.sort((a, b) => ordem[a.nivel] - ordem[b.nivel]);
+  }
+
+  function mensagem(al) {
+    const p = S.paciente(al.pacienteId), n = primeiro(p.nome), c = S.CLINICA.nome;
+    if (al.tipo === 'orcamento') return `Oi, ${n}! Aqui é da ${c}. 😊 Ficou alguma dúvida sobre o seu plano de ${al.ref.descricao.toLowerCase()}? Conseguimos parcelar em até 10x. Quer que eu reserve um horário para começar?`;
+    if (al.tipo === 'confirmar') return `Oi, ${n}! Lembrando do seu horário amanhã às ${al.ref.hora} (${S.servico(al.ref.servicoId).nome}). Posso confirmar sua presença?`;
+    if (al.tipo === 'faltou') return `Oi, ${n}! Sentimos sua falta na última consulta. Quer escolher um novo horário? Tenho vagas ainda esta semana. 😊`;
+    return `Oi, ${n}! Já faz um tempinho desde a sua última visita na ${c}. Que tal agendar seu retorno? Tenho horários livres nos próximos dias.`;
+  }
+
+  function renderAlertas() {
+    const lista = analisar();
+    $('#alertas').innerHTML = lista.slice(0, 8).map((al, i) => `
+      <div class="al ${al.nivel}"><span class="ic">${al.ic}</span>
+        <div><b>${esc(al.titulo)}</b><small>${esc(al.det)}</small></div>
+        <button class="btn btn-ghost btn-sm" data-i="${i}">Mensagem</button></div>`).join('') || '<p class="muted">Nada pendente. 🎉</p>';
+    $('#alertas').onclick = (e) => {
+      const b = e.target.closest('[data-i]'); if (!b) return;
+      const al = lista[Number(b.dataset.i)];
+      const dlg = $('#dlg');
+      dlg.innerHTML = `<h2 style="margin-top:0">Mensagem sugerida</h2><p class="muted" style="margin-top:-6px">${esc(S.paciente(al.pacienteId).nome)} · ${esc(S.paciente(al.pacienteId).tel)}</p>
+        <textarea rows="6">${esc(mensagem(al))}</textarea>
+        <p class="muted" style="font-size:13px">Na versão real, a Claude escreve com base no histórico do paciente, e a mensagem pode sair pelo WhatsApp com um clique.</p>
+        <div style="display:flex;justify-content:flex-end;gap:8px"><button class="btn btn-ghost" onclick="dlg.close()">Fechar</button><button class="btn btn-primary" onclick="navigator.clipboard?.writeText(dlg.querySelector('textarea').value);this.textContent='Copiado ✓'">Copiar</button></div>`;
+      dlg.showModal();
+    };
+  }
+
+  // Próximo dia de atendimento (amanhã, ou segunda se amanhã for domingo).
+  function respostaAmanha(d) {
+    const am = S.proximosDiasAbertos(3).find((x) => x > U.hoje());
+    const l = d.agendamentos.filter((a) => a.data === am && a.status !== 'cancelado').sort((a, b) => a.hora.localeCompare(b.hora));
+    const pend = l.filter((a) => a.status === 'pendente');
+    return [l.length ? `No próximo dia de atendimento (${U.fmtData(am)}) há ${l.length} horários, ${pend.length} sem confirmação:\n` + pend.map((a) => `• ${a.hora}: ${S.paciente(a.pacienteId).nome} (${S.servico(a.servicoId).nome})`).join('\n') : `Não há atendimentos em ${U.fmtData(am)}.`, 'agenda'];
+  }
+
+  // Respostas: na versão real a pergunta + os dados vão para a Claude.
+  // Aqui, regras simples calculam a resposta sobre os mesmos dados.
+  function responder(q) {
+    const d = S.load(), hj = U.hoje(), n = norm(q);
+    const abertos = d.orcamentos.filter((o) => ['enviado', 'negociacao'].includes(o.etapa));
+    const semana = U.iso(U.addDays(new Date(), 7));
+    if (/orcament|aberto|negocia/.test(n)) {
+      const tot = abertos.reduce((t, o) => t + o.valor, 0);
+      const top = [...abertos].sort((a, b) => b.valor - a.valor).slice(0, 3).map((o) => `• ${S.paciente(o.pacienteId).nome}: ${o.descricao} (${U.brl(o.valor)})`).join('\n');
+      return [`Há ${abertos.length} orçamentos em aberto, somando ${U.brl(tot)}. Os maiores:\n${top}\n\nSugestão: começar pelo maior, que está parado há ${U.diasEntre([...abertos].sort((a, b) => b.valor - a.valor)[0].ultimoContato, hj)} dias.`, 'orçamentos']; }
+    if (/amanha|confirm/.test(n)) return respostaAmanha(d);
+    if (/falt/.test(n)) {
+      const ini = U.iso(U.addDays(new Date(), -14));
+      const per = d.agendamentos.filter((a) => a.data >= ini && a.data < hj);
+      const f = per.filter((a) => a.status === 'faltou'), c = per.filter((a) => a.status === 'concluido');
+      const taxa = Math.round(f.length / Math.max(1, f.length + c.length) * 100);
+      return [`Nos últimos 14 dias foram ${f.length} faltas em ${f.length + c.length} horários (${taxa}%).\nA confirmação automática no WhatsApp um dia antes costuma ser o jeito mais simples de reduzir esse número.`, 'agenda (14 dias)']; }
+    if (/fatur|receita|ganh|dinheiro|semana/.test(n)) {
+      const ini = U.iso(U.addDays(new Date(), -14));
+      const c = d.agendamentos.filter((a) => a.data >= ini && a.data < hj && a.status === 'concluido');
+      const tot = c.reduce((t, a) => t + (S.servico(a.servicoId).preco || 0), 0);
+      const prev = d.agendamentos.filter((a) => a.data >= hj && a.data <= semana && ['pendente', 'confirmado'].includes(a.status)).reduce((t, a) => t + (S.servico(a.servicoId).preco || 0), 0);
+      return [`Últimos 14 dias: ${U.brl(tot)} em ${c.length} atendimentos.\nPrevisto para os próximos 7 dias: ${U.brl(prev)}.`, 'agenda + tabela de preços']; }
+    if (/servic|procur|popular|mais/.test(n)) {
+      const cont = {}; d.agendamentos.forEach((a) => (cont[a.servicoId] = (cont[a.servicoId] || 0) + 1));
+      const top = Object.entries(cont).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => `• ${S.servico(k).nome}: ${v}`).join('\n');
+      return [`Serviços mais agendados:\n${top}`, 'agenda']; }
+    if (/whats|site|origem|canal|de onde|vem/.test(n)) {
+      const cont = {}; d.agendamentos.forEach((a) => (cont[a.origem] = (cont[a.origem] || 0) + 1));
+      return ['Origem dos agendamentos:\n' + Object.entries(cont).sort((a, b) => b[1] - a[1]).map(([k, v]) => `• ${S.ORIGENS[k]}: ${v}`).join('\n'), 'agenda']; }
+    if (/hoje|prioridad|ligar|chamar|contato/.test(n)) {
+      const l = analisar().slice(0, 4);
+      return [`Hoje eu chamaria, nesta ordem:\n` + l.map((x, i) => `${i + 1}. ${x.titulo}`).join('\n'), 'orçamentos + agenda']; }
+    const p = d.pacientes.find((x) => new RegExp('\\b' + norm(primeiro(x.nome)) + '\\b').test(n));
+    if (p) {
+      const ags = d.agendamentos.filter((a) => a.pacienteId === p.id).sort((a, b) => b.data.localeCompare(a.data));
+      const o = d.orcamentos.filter((x) => x.pacienteId === p.id);
+      return [`${p.nome} (${p.tel})\n• ${ags.length} agendamentos; o mais recente: ${ags[0] ? `${S.servico(ags[0].servicoId).nome} em ${U.fmtCurta(ags[0].data)} (${S.STATUS[ags[0].status].toLowerCase()})` : '—'}\n• Orçamentos: ${o.length ? o.map((x) => `${x.descricao} (${S.ETAPAS_ORCAMENTO[x.etapa].toLowerCase()})`).join('; ') : 'nenhum'}`, 'ficha do paciente']; }
+    return ['Posso responder sobre orçamentos, faltas, agenda de amanhã, faturamento, serviços mais procurados, origem dos pacientes ou sobre um paciente pelo nome. Experimente uma das sugestões abaixo.', null];
+  }
+
+  function msg(cls, txt, fonte) {
+    const m = document.createElement('div'); m.className = 'm ' + cls; m.textContent = txt;
+    if (fonte) { const f = document.createElement('span'); f.className = 'fonte'; f.textContent = 'Fonte: ' + fonte; m.appendChild(f); }
+    $('#msgs').appendChild(m); $('#msgs').scrollTop = $('#msgs').scrollHeight;
+  }
+  function perguntar(q) {
+    msg('u', q);
+    setTimeout(() => { const [r, f] = responder(q); msg('a', r, f); }, 450);
+  }
+  const SUG = ['Quem devo chamar hoje?', 'Quanto temos em orçamentos abertos?', 'Como estão as faltas?', 'Quem falta confirmar amanhã?', 'Qual o faturamento?', 'De onde vêm os pacientes?'];
+  $('#sug').innerHTML = SUG.map((s) => `<button type="button">${s}</button>`).join('');
+  $('#sug').onclick = (e) => { if (e.target.tagName === 'BUTTON') perguntar(e.target.textContent); };
+  $('#f').onsubmit = (e) => { e.preventDefault(); const q = $('#q').value.trim(); if (q) { $('#q').value = ''; perguntar(q); } };
+
+  const dlg = $('#dlg');
+  msg('a', 'Olá! Sou o assistente da clínica. Leio a agenda, os pacientes e os orçamentos e te digo o que precisa de atenção. O que quer saber?');
+  renderAlertas();
+  document.addEventListener('demo:changed', renderAlertas);
+</script>
+</body>
+</html>

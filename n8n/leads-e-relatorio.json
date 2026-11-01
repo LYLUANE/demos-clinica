@@ -1,0 +1,155 @@
+{
+  "name": "Clínica · Leads do site e relatório semanal",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Leads do site → planilha, e-mail e WhatsApp\nO formulário do site faz um POST no webhook. O lead vira uma linha na planilha, recebe um e-mail de boas-vindas e a recepção é avisada no WhatsApp.\n\n## Relatório semanal\nToda segunda às 8h, lê a planilha, resume a semana e manda por e-mail.\n\n**Configurar:** credenciais do Google Sheets, do Gmail e do WhatsApp; ID da planilha (aba *Leads* com as colunas Data, Nome, Email, Interesse, Origem, Status).",
+        "height": 300,
+        "width": 560
+      },
+      "id": "c3f0c003-0000-4000-8000-000000000001",
+      "name": "Sobre este fluxo",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-140, -400]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-clinica",
+        "options": {}
+      },
+      "id": "c3f0c003-0000-4000-8000-000000000002",
+      "name": "Formulário do site",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "7e2b1c4d-3a5f-4b6e-8c9d-0c11a1ca0002"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "mode": "id", "value": "COLE_AQUI_O_ID_DA_PLANILHA" },
+        "sheetName": { "__rl": true, "mode": "name", "value": "Leads" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Data": "={{ $now.toFormat('yyyy-MM-dd') }}",
+            "Nome": "={{ $json.body.nome }}",
+            "Email": "={{ $json.body.email }}",
+            "Interesse": "={{ $json.body.interesse }}",
+            "Origem": "={{ $json.body.origem }}",
+            "Status": "Novo"
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "Data", "displayName": "Data", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Nome", "displayName": "Nome", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Email", "displayName": "Email", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Interesse", "displayName": "Interesse", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Origem", "displayName": "Origem", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Status", "displayName": "Status", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c3f0c003-0000-4000-8000-000000000003",
+      "name": "Planilha: nova linha",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Formulário do site').item.json.body.email }}",
+        "subject": "Recebemos seu pedido de avaliação 😊",
+        "emailType": "text",
+        "message": "=Olá, {{ $('Formulário do site').item.json.body.nome.split(' ')[0] }}!\n\nRecebemos seu interesse em {{ $('Formulário do site').item.json.body.interesse.toLowerCase() }}. Nossa equipe vai entrar em contato hoje para combinar o melhor horário.\n\nAté breve,\nEquipe Clínica Aurora",
+        "options": {}
+      },
+      "id": "c3f0c003-0000-4000-8000-000000000004",
+      "name": "E-mail de boas-vindas",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v21.0/COLE_AQUI_O_PHONE_NUMBER_ID/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: '5511900000000', type: 'text', text: { body: 'Novo lead: ' + $('Formulário do site').item.json.body.nome + ' (' + $('Formulário do site').item.json.body.interesse + ', via ' + $('Formulário do site').item.json.body.origem + ')' } }) }}",
+        "options": {}
+      },
+      "id": "c3f0c003-0000-4000-8000-000000000005",
+      "name": "Avisar recepção no WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 0]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "cronExpression", "expression": "0 8 * * 1" }
+          ]
+        }
+      },
+      "id": "c3f0c003-0000-4000-8000-000000000006",
+      "name": "Toda segunda às 8h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 260]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": { "__rl": true, "mode": "id", "value": "COLE_AQUI_O_ID_DA_PLANILHA" },
+        "sheetName": { "__rl": true, "mode": "name", "value": "Leads" },
+        "options": {}
+      },
+      "id": "c3f0c003-0000-4000-8000-000000000007",
+      "name": "Ler planilha",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [240, 260]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Resume os leads dos últimos 7 dias.\nconst inicio = $now.minus({ days: 7 }).toFormat('yyyy-MM-dd');\nconst leads = $input.all().map((i) => i.json).filter((l) => l.Data >= inicio);\nconst contar = (campo) => Object.entries(leads.reduce((m, l) => (m[l[campo]] = (m[l[campo]] || 0) + 1, m), {}))\n  .sort((a, b) => b[1] - a[1]).map(([k, v]) => `- ${k}: ${v}`).join('\\n');\nconst agendou = leads.filter((l) => l.Status === 'Agendou').length;\nconst semContato = leads.filter((l) => l.Status === 'Novo').map((l) => l.Nome);\nconst texto = `Leads da semana: ${leads.length}\\nViraram agendamento: ${agendou}\\n\\nPor interesse:\\n${contar('Interesse')}\\n\\nPor origem:\\n${contar('Origem')}\\n\\n` +\n  (semContato.length ? `Ainda sem contato: ${semContato.join(', ')}` : 'Todos os leads foram contatados.');\nreturn [{ json: { texto } }];"
+      },
+      "id": "c3f0c003-0000-4000-8000-000000000008",
+      "name": "Resumir a semana",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 260]
+    },
+    {
+      "parameters": {
+        "sendTo": "recepcao@exemplo.com",
+        "subject": "Relatório semanal de leads",
+        "emailType": "text",
+        "message": "={{ $json.texto }}",
+        "options": {}
+      },
+      "id": "c3f0c003-0000-4000-8000-000000000009",
+      "name": "Enviar relatório",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [720, 260]
+    }
+  ],
+  "connections": {
+    "Formulário do site": { "main": [[{ "node": "Planilha: nova linha", "type": "main", "index": 0 }]] },
+    "Planilha: nova linha": { "main": [[{ "node": "E-mail de boas-vindas", "type": "main", "index": 0 }]] },
+    "E-mail de boas-vindas": { "main": [[{ "node": "Avisar recepção no WhatsApp", "type": "main", "index": 0 }]] },
+    "Toda segunda às 8h": { "main": [[{ "node": "Ler planilha", "type": "main", "index": 0 }]] },
+    "Ler planilha": { "main": [[{ "node": "Resumir a semana", "type": "main", "index": 0 }]] },
+    "Resumir a semana": { "main": [[{ "node": "Enviar relatório", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "pinData": {}
+}

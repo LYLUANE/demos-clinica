@@ -1,0 +1,164 @@
+{
+  "name": "Clínica · Atendente de WhatsApp com IA",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Atendente de WhatsApp com IA\nRecebe a mensagem do paciente (API oficial do WhatsApp Business), pede para a Claude entender a intenção e escrever a resposta seguindo as regras da clínica, e responde. Urgência ou pedido de humano também avisam a recepção.\n\n**Configurar:** preencha o nó *Configuração*, crie as credenciais *Anthropic (x-api-key)* e *WhatsApp (Bearer)* e aponte o webhook do app da Meta para a URL do nó *WhatsApp: mensagem recebida*.",
+        "height": 260,
+        "width": 520
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000001",
+      "name": "Sobre este fluxo",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-120, -320]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-clinica",
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000002",
+      "name": "WhatsApp: mensagem recebida",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "5d0c9a8e-7b1f-4c55-9a3e-0c11a1ca0001"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "c1", "name": "whatsappPhoneId", "value": "COLE_AQUI_O_PHONE_NUMBER_ID", "type": "string" },
+            { "id": "c2", "name": "telefoneRecepcao", "value": "5511900000000", "type": "string" },
+            { "id": "c3", "name": "regras", "value": "Você é a assistente virtual da Clínica Aurora (odontologia e estética). Responda em português, de forma curta e gentil. Preços de referência: avaliação gratuita; limpeza R$ 180; clareamento R$ 900; toxina botulínica R$ 1.200; preenchimento labial R$ 1.500; limpeza de pele R$ 250; lentes de contato dental sob avaliação. Horário: seg. a sex. 8h às 19h, sáb. 8h às 13h. Parcelamos em até 10x. Não atendemos convênio, mas emitimos recibo para reembolso. Nunca dê diagnóstico. Se a pessoa relatar dor, sangramento, inchaço ou urgência, a intenção é 'urgencia'. Se pedir para falar com uma pessoa, a intenção é 'humano'. Responda SOMENTE com um JSON no formato {\"intencao\": \"duvida|agendar|remarcar|urgencia|humano|outro\", \"resposta\": \"texto para o paciente\"}.", "type": "string" }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000003",
+      "name": "Configuração",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pega a primeira mensagem de texto do payload da Meta.\nconst cfg = $input.first().json;\nconst value = cfg.body?.entry?.[0]?.changes?.[0]?.value;\nconst msg = value?.messages?.[0];\nif (!msg || msg.type !== 'text') return [];\nreturn [{ json: {\n  de: msg.from,\n  nome: value.contacts?.[0]?.profile?.name || '',\n  texto: msg.text.body,\n  whatsappPhoneId: cfg.whatsappPhoneId,\n  telefoneRecepcao: cfg.telefoneRecepcao,\n  pedidoIA: {\n    model: 'claude-haiku-5-5',\n    max_tokens: 400,\n    system: cfg.regras,\n    messages: [{ role: 'user', content: msg.text.body }]\n  }\n} }];"
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000004",
+      "name": "Extrair mensagem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "anthropic-version", "value": "2023-06-01" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.pedidoIA) }}",
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000005",
+      "name": "IA: entender e responder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const msg = $('Extrair mensagem').item.json;\nlet saida = { intencao: 'outro', resposta: 'Desculpe, não entendi. Pode repetir?' };\ntry { saida = JSON.parse($json.content[0].text); } catch (e) { /* mantém a resposta padrão */ }\nreturn { json: {\n  ...msg,\n  intencao: saida.intencao,\n  resposta: saida.resposta,\n  precisaHumano: ['urgencia', 'humano'].includes(saida.intencao)\n} };"
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000006",
+      "name": "Ler resposta da IA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "h1",
+              "leftValue": "={{ $json.precisaHumano }}",
+              "rightValue": "",
+              "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000007",
+      "name": "Precisa de humano?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1100, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $json.whatsappPhoneId }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.telefoneRecepcao, type: 'text', text: { body: '⚠️ Atendimento humano: ' + ($json.nome || $json.de) + ' (' + $json.de + ') escreveu: ' + $json.texto } }) }}",
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000008",
+      "name": "Avisar recepção",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, -120]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $('Ler resposta da IA').item.json.whatsappPhoneId }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $('Ler resposta da IA').item.json.de, type: 'text', text: { body: $('Ler resposta da IA').item.json.resposta } }) }}",
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000009",
+      "name": "Responder paciente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 0]
+    }
+  ],
+  "connections": {
+    "WhatsApp: mensagem recebida": { "main": [[{ "node": "Configuração", "type": "main", "index": 0 }]] },
+    "Configuração": { "main": [[{ "node": "Extrair mensagem", "type": "main", "index": 0 }]] },
+    "Extrair mensagem": { "main": [[{ "node": "IA: entender e responder", "type": "main", "index": 0 }]] },
+    "IA: entender e responder": { "main": [[{ "node": "Ler resposta da IA", "type": "main", "index": 0 }]] },
+    "Ler resposta da IA": { "main": [[{ "node": "Precisa de humano?", "type": "main", "index": 0 }]] },
+    "Precisa de humano?": {
+      "main": [
+        [{ "node": "Avisar recepção", "type": "main", "index": 0 }],
+        [{ "node": "Responder paciente", "type": "main", "index": 0 }]
+      ]
+    },
+    "Avisar recepção": { "main": [[{ "node": "Responder paciente", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "pinData": {}
+}

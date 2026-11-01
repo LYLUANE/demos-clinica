@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Portfólio · Soluções para clínicas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  header { padding: 64px 0 32px; }
+  header h1 { font: 600 clamp(30px, 4.5vw, 46px)/1.1 var(--font-display); max-width: 760px; }
+  header p { font-size: 18px; color: var(--muted); max-width: 640px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+  .demo { padding: 24px; display: flex; flex-direction: column; gap: 10px; }
+  .demo .n { font: 600 14px var(--font); color: var(--accent); text-transform: uppercase; letter-spacing: .08em; }
+  .demo h2 { font-size: 22px; margin: 0; }
+  .demo ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 15px; }
+  .demo .tech { font-size: 13px; color: var(--muted); }
+  .demo .btn { align-self: flex-start; margin-top: auto; }
+  .flow { margin: 40px 0; padding: 24px; }
+  .flow h2 { font: 600 24px var(--font-display); }
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 12px; }
+  .step { background: var(--surface-2); border-radius: 12px; padding: 14px; font-size: 15px; }
+  .step b { display: block; margin-bottom: 4px; }
+  footer { padding: 32px 0 48px; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<header class="container">
+  <h1>Site, WhatsApp, IA e gestão para clínicas, funcionando juntos.</h1>
+  <p>Demonstrações de uma clínica fictícia que compartilham os mesmos dados. Agende pelo site ou pelo WhatsApp e veja o agendamento aparecer no painel, no assistente de IA e no estoque.</p>
+</header>
+
+<main class="container">
+  <div class="grid">
+    <article class="card demo">
+      <span class="n">01 · Site</span>
+      <h2>Site com agendamento online</h2>
+      <ul>
+        <li>Página da clínica com serviços, equipe e dúvidas frequentes</li>
+        <li>Agendamento em 1 minuto, com horários livres em tempo real</li>
+        <li>Responsivo, pronto para celular</li>
+      </ul>
+      <span class="tech">HTML · CSS · JavaScript (versão real: WordPress ou Next.js)</span>
+      <a class="btn btn-primary" href="site/index.html">Abrir demo</a>
+    </article>
+    <article class="card demo">
+      <span class="n">02 · Chatbot</span>
+      <h2>Atendente de WhatsApp com IA</h2>
+      <ul>
+        <li>Responde preços, endereço, convênio e pagamento</li>
+        <li>Agenda direto na conversa</li>
+        <li>Lembrete de 24h, follow-up de orçamento e transferência para humano</li>
+      </ul>
+      <span class="tech">Simulação no navegador (versão real: n8n + API do WhatsApp + Claude)</span>
+      <a class="btn btn-primary" href="chatbot/index.html">Abrir demo</a>
+    </article>
+    <article class="card demo">
+      <span class="n">03 · Gestão</span>
+      <h2>Painel da recepção</h2>
+      <ul>
+        <li>Agenda do dia e por profissional, com confirmação e faltas</li>
+        <li>Funil de orçamentos com alerta de orçamento parado</li>
+        <li>Pacientes e indicadores (faltas, faturamento, origem)</li>
+      </ul>
+      <span class="tech">JavaScript (versão real: Next.js + Supabase)</span>
+      <a class="btn btn-primary" href="gestao/index.html">Abrir demo</a>
+    </article>
+    <article class="card demo">
+      <span class="n">04 · IA no CRM</span>
+      <h2>Assistente de IA no CRM</h2>
+      <ul>
+        <li>Lista de prioridades do dia: orçamentos parados, confirmações, faltas</li>
+        <li>Perguntas em português sobre os dados da clínica</li>
+        <li>Mensagem sugerida para cada paciente</li>
+      </ul>
+      <span class="tech">Simulação no navegador (versão real: API da Claude + banco da clínica)</span>
+      <a class="btn btn-primary" href="crm/index.html">Abrir demo</a>
+    </article>
+    <article class="card demo">
+      <span class="n">05 · Estoque</span>
+      <h2>Estoque e caixa</h2>
+      <ul>
+        <li>Baixa automática de materiais a cada atendimento</li>
+        <li>Alerta de item abaixo do mínimo e pedido de compra pronto</li>
+        <li>Entradas × saídas e saldo do período</li>
+      </ul>
+      <span class="tech">JavaScript (versão real: Next.js + Supabase)</span>
+      <a class="btn btn-primary" href="estoque/index.html">Abrir demo</a>
+    </article>
+    <article class="card demo">
+      <span class="n">06 · Automação</span>
+      <h2>Do formulário ao relatório</h2>
+      <ul>
+        <li>Formulário → planilha → e-mail → aviso no WhatsApp</li>
+        <li>Fluxo animado mostrando cada etapa</li>
+        <li>Relatório semanal gerado sozinho</li>
+      </ul>
+      <span class="tech">Simulação (versão real: n8n + Google Sheets + Gmail)</span>
+      <a class="btn btn-primary" href="automacao/index.html">Abrir demo</a>
+    </article>
+    <article class="card demo">
+      <span class="n">07 · Documentos</span>
+      <h2>Chat com os documentos</h2>
+      <ul>
+        <li>Respostas tiradas só dos documentos da clínica</li>
+        <li>Cada resposta mostra o trecho de origem</li>
+        <li>Diz "não sei" e encaminha quando a informação não existe</li>
+      </ul>
+      <span class="tech">Busca simplificada (versão real: busca semântica + Claude)</span>
+      <a class="btn btn-primary" href="documentos/index.html">Abrir demo</a>
+    </article>
+    <article class="card demo">
+      <span class="n">08 · n8n</span>
+      <h2>Workflows prontos</h2>
+      <ul>
+        <li>Atendente de WhatsApp com IA</li>
+        <li>Lembretes de 24h e follow-up de orçamentos</li>
+        <li>Leads do site e relatório semanal</li>
+      </ul>
+      <span class="tech">Arquivos JSON para importar no n8n</span>
+      <a class="btn btn-primary" href="n8n/index.html">Ver workflows</a>
+    </article>
+  </div>
+
+  <section class="card flow">
+    <h2>Como as três se conectam</h2>
+    <div class="steps">
+      <div class="step"><b>1. Paciente chega</b>pelo site ou pelo WhatsApp</div>
+      <div class="step"><b>2. Agenda sozinho</b>escolhe o serviço e um horário livre</div>
+      <div class="step"><b>3. Recepção vê na hora</b>o agendamento aparece no painel</div>
+      <div class="step"><b>4. Automação cuida do resto</b>lembrete de 24h e follow-up de orçamentos</div>
+    </div>
+  </section>
+</main>
+
+<footer class="container">
+  Demonstração de portfólio. Clínica, profissionais, pacientes e depoimentos são fictícios. Os dados ficam só no seu navegador.
+</footer>
+</body>
+</html>
